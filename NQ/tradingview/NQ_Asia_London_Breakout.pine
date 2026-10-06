@@ -13,9 +13,13 @@ float swingAwayPts = input.float(10.0, "Minimum move away before pullback", minv
 float retestTolerance = input.float(5.0, "Retest tolerance (points)", minval=0.0, step=0.25)
 float retestLabelOffset = input.float(12.0, "Retest label offset (points)", minval=1.0, step=1.0)
 
+bool requireFullAsia = input.bool(true, "Require full Asia-session data")
+float minAsiaCoveragePct = input.float(80.0, "Minimum Asia-session coverage %", minval=10.0, maxval=100.0, step=5.0)
+
 bool showAsiaFill = input.bool(true, "Shade Asia session")
 bool showImmediate = input.bool(true, "Mark breakout candle")
 bool showRetest = input.bool(true, "Mark confirmed retest candle")
+bool showCoverageWarning = input.bool(true, "Show missing-session warning")
 
 // -------------------- Session state --------------------
 bool inAsia = not na(time(timeframe.period, asiaSession, tz))
@@ -23,24 +27,52 @@ bool inLondon = not na(time(timeframe.period, londonWindow, tz))
 bool asiaStart = inAsia and not inAsia[1]
 bool asiaEnd = not inAsia and inAsia[1]
 
+// The Asia session is 00:00-07:00 London = 7 hours.
+// NQ/MNQ trade through this window. US stocks such as INTC do not.
+// Without a coverage check, TradingView can incorrectly treat only the final
+// after-hours bars as the "Asia range" and carry that false range into London.
+float tfSeconds = timeframe.in_seconds()
+int expectedAsiaBars = tfSeconds > 0 ? int(math.round(7.0 * 60.0 * 60.0 / tfSeconds)) : 0
+int minimumAsiaBars = expectedAsiaBars > 0 ? int(math.ceil(expectedAsiaBars * minAsiaCoveragePct / 100.0)) : 1
+
 var float asiaHigh = na
 var float asiaLow = na
+var int asiaBarCount = 0
 var bool rangeReady = false
+var bool asiaCoverageOK = false
 
 if asiaStart
     asiaHigh := high
     asiaLow := low
+    asiaBarCount := 1
     rangeReady := false
+    asiaCoverageOK := false
 else if inAsia
     asiaHigh := math.max(nz(asiaHigh, high), high)
     asiaLow := math.min(nz(asiaLow, low), low)
+    asiaBarCount += 1
 
 if asiaEnd
-    rangeReady := true
+    asiaCoverageOK := not requireFullAsia or asiaBarCount >= minimumAsiaBars
+    rangeReady := asiaCoverageOK
 
-plot(rangeReady or inAsia ? asiaHigh : na, "Asia High", color=color.new(color.green, 0), linewidth=2, style=plot.style_linebr)
-plot(rangeReady or inAsia ? asiaLow : na, "Asia Low", color=color.new(color.red, 0), linewidth=2, style=plot.style_linebr)
+// If the symbol has no proper 00:00-07:00 London market data, do not draw
+// a misleading Asia range or fire breakout/retest signals.
+float plottedAsiaHigh = (rangeReady or inAsia) and (not requireFullAsia or inAsia or asiaCoverageOK) ? asiaHigh : na
+float plottedAsiaLow = (rangeReady or inAsia) and (not requireFullAsia or inAsia or asiaCoverageOK) ? asiaLow : na
+
+plot(plottedAsiaHigh, "Asia High", color=color.new(color.green, 0), linewidth=2, style=plot.style_linebr)
+plot(plottedAsiaLow, "Asia Low", color=color.new(color.red, 0), linewidth=2, style=plot.style_linebr)
 bgcolor(showAsiaFill and inAsia ? color.new(color.blue, 92) : na, title="Asia Session")
+
+// -------------------- Coverage warning --------------------
+var table coverageTable = table.new(position.top_right, 1, 1)
+if barstate.islast
+    bool badCoverage = requireFullAsia and not inAsia and not asiaCoverageOK
+    if showCoverageWarning and badCoverage
+        table.cell(coverageTable, 0, 0, "NO FULL ASIA DATA\nSignals disabled", text_color=color.white, bgcolor=color.new(color.red, 10))
+    else
+        table.cell(coverageTable, 0, 0, "", bgcolor=color.new(color.black, 100))
 
 // -------------------- Breakout candle --------------------
 var bool breakoutTriggered = false
@@ -69,8 +101,8 @@ if londonStart
     pullbackHigh := na
     pullbackLow := na
 
-bool longBreak = rangeReady and inLondon and not breakoutTriggered and close > asiaHigh + bufferPts
-bool shortBreak = rangeReady and inLondon and not breakoutTriggered and close < asiaLow - bufferPts
+bool longBreak = rangeReady and asiaCoverageOK and inLondon and not breakoutTriggered and close > asiaHigh + bufferPts
+bool shortBreak = rangeReady and asiaCoverageOK and inLondon and not breakoutTriggered and close < asiaLow - bufferPts
 
 if longBreak
     breakoutTriggered := true
