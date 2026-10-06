@@ -1,0 +1,38 @@
+name: NQ London Breakout Research
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "strategies/**"
+      - "scripts/**"
+      - ".github/workflows/nq_london_breakout.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install pandas numpy
+      - name: Download NQ dataset
+        run: python scripts/fetch_nq_data.py
+      - name: Run baseline sweep
+        run: python scripts/run_nq_london_sweep.py
+      - name: Commit research results
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add results/
+          if git diff --cached --quiet; then
+            echo "No result changes"
+          else
+            git commit -m "Update NQ London breakout research results"
+            git push
+          fi
