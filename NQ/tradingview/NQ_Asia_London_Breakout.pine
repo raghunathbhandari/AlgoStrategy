@@ -8,6 +8,7 @@ string londonWindow = input.session("0700-1200:23456", "London entry window")
 float bufferPts = input.float(2.0, "Breakout buffer (NQ points)", minval=0.0, step=0.25)
 float retestTolerance = input.float(5.0, "Retest tolerance (points)", minval=0.0, step=0.25)
 int maxRetestBars = input.int(6, "Max retest bars", minval=1, maxval=24)
+float retestLabelOffset = input.float(12.0, "Retest label offset (points)", minval=1.0, step=1.0)
 bool showAsiaFill = input.bool(true, "Shade Asia session")
 bool showImmediate = input.bool(true, "Mark immediate breakout")
 bool showRetest = input.bool(true, "Mark breakout + retest entry")
@@ -22,7 +23,6 @@ var float asiaHigh = na
 var float asiaLow = na
 var bool rangeReady = false
 
-// Reset and build Asia high/low.
 if asiaStart
     asiaHigh := high
     asiaLow := low
@@ -34,7 +34,6 @@ else if inAsia
 if asiaEnd
     rangeReady := true
 
-// Keep levels available until the next Asia session starts.
 plot(rangeReady or inAsia ? asiaHigh : na, "Asia High", color=color.new(color.green, 0), linewidth=2, style=plot.style_linebr)
 plot(rangeReady or inAsia ? asiaLow : na, "Asia Low", color=color.new(color.red, 0), linewidth=2, style=plot.style_linebr)
 bgcolor(showAsiaFill and inAsia ? color.new(color.blue, 92) : na, title="Asia Session")
@@ -44,7 +43,6 @@ var bool immediateTriggered = false
 var int breakoutDirection = 0
 var int breakoutBar = na
 
-// New London window/day reset.
 bool londonStart = inLondon and not inLondon[1]
 if londonStart
     immediateTriggered := false
@@ -89,8 +87,11 @@ bool shortRetest = retestWindowOpen and levelTouched and breakoutDirection == -1
 if longRetest or shortRetest
     retestTriggered := true
 
-plotshape(showRetest and longRetest, title="Long Retest Entry", style=shape.triangleup, location=location.belowbar, text="RETEST", color=color.new(color.lime, 0), textcolor=color.black, size=size.small)
-plotshape(showRetest and shortRetest, title="Short Retest Entry", style=shape.triangledown, location=location.abovebar, text="RETEST", color=color.new(color.orange, 0), textcolor=color.black, size=size.small)
+float longRetestY = longRetest ? low - retestLabelOffset : na
+float shortRetestY = shortRetest ? high + retestLabelOffset : na
+
+plotshape(showRetest ? longRetestY : na, title="Long Retest Entry", style=shape.labelup, location=location.absolute, text="RETEST", color=color.new(color.lime, 0), textcolor=color.black, size=size.tiny)
+plotshape(showRetest ? shortRetestY : na, title="Short Retest Entry", style=shape.labeldown, location=location.absolute, text="RETEST", color=color.new(color.orange, 0), textcolor=color.black, size=size.tiny)
 
 // Alerts
 alertcondition(longBreak, "NQ Asia High Breakout", "NQ: 5m close above Asia High")
