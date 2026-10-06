@@ -1,5 +1,5 @@
 //@version=6
-indicator("NQ Asia Range -> London Breakout", overlay=true, max_labels_count=500)
+indicator("ASJR - NQ Asia Range -> London Breakout", overlay=true, max_labels_count=500)
 
 // -------------------- Inputs --------------------
 string tz = input.string("Europe/London", "Session timezone")
