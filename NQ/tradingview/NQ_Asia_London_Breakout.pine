@@ -1,19 +1,24 @@
 //@version=6
-indicator("ASJR - NQ Asia Range -> London Breakout", overlay=true, max_labels_count=500)
+indicator("ASJR - Asia Range Breakout / Retest", overlay=true, max_labels_count=500)
 
 // -------------------- Inputs --------------------
 string tz = input.string("Europe/London", "Session timezone")
 string asiaSession = input.session("0000-0700:23456", "Asia range")
-string londonWindow = input.session("0700-1200:23456", "London entry window")
-float bufferPts = input.float(2.0, "Breakout buffer (NQ points)", minval=0.0, step=0.25)
+string londonWindow = input.session("0700-1200:23456", "NQ London entry window")
+string stockWindow = input.session("0700-2100:23456", "Stock signal window")
+
+// NQ reference settings. For stocks these are automatically scaled.
+float nqReferencePrice = input.float(31500.0, "NQ reference price for auto-scaling", minval=1000.0)
+float bufferPts = input.float(2.0, "NQ breakout buffer (points)", minval=0.0, step=0.25)
+float swingAwayPts = input.float(10.0, "NQ minimum move away (points)", minval=1.0, step=0.25)
+float retestTolerance = input.float(5.0, "NQ retest tolerance (points)", minval=0.0, step=0.25)
+float retestLabelOffset = input.float(12.0, "NQ retest label offset (points)", minval=1.0, step=1.0)
 
 int minRetestBars = input.int(3, "Minimum bars before pullback", minval=2, maxval=20)
 int maxRetestBars = input.int(12, "Maximum bars before pullback", minval=3, maxval=48)
-float swingAwayPts = input.float(10.0, "Minimum move away before pullback", minval=1.0, step=0.25)
-float retestTolerance = input.float(5.0, "Retest tolerance (points)", minval=0.0, step=0.25)
-float retestLabelOffset = input.float(12.0, "Retest label offset (points)", minval=1.0, step=1.0)
 
-bool requireFullAsia = input.bool(true, "Require full Asia-session data")
+bool autoScaleStocks = input.bool(true, "Auto-scale NQ point settings for stocks")
+bool requireFullAsia = input.bool(false, "Require full Asia-session data")
 float minAsiaCoveragePct = input.float(80.0, "Minimum Asia-session coverage %", minval=10.0, maxval=100.0, step=5.0)
 
 bool showAsiaFill = input.bool(true, "Shade Asia session")
@@ -21,16 +26,27 @@ bool showImmediate = input.bool(true, "Mark breakout candle")
 bool showRetest = input.bool(true, "Mark confirmed retest candle")
 bool showCoverageWarning = input.bool(true, "Show missing-session warning")
 
+// -------------------- Symbol-aware settings --------------------
+bool isStock = syminfo.type == "stock"
+
+// Stocks such as INTC do not trade like NQ overnight and their US-session
+// breakout often happens after 12:00 London. Keep NQ on the London window,
+// but allow stocks through the normal US cash session.
+bool inSignalWindow = isStock ? not na(time(timeframe.period, stockWindow, tz)) : not na(time(timeframe.period, londonWindow, tz))
+
+// Scale NQ point distances to the current stock price.
+// Minimums based on mintick stop values becoming effectively zero.
+float scale = isStock and autoScaleStocks ? close / nqReferencePrice : 1.0
+float effectiveBuffer = isStock and autoScaleStocks ? math.max(syminfo.mintick * 2.0, bufferPts * scale) : bufferPts
+float effectiveSwingAway = isStock and autoScaleStocks ? math.max(syminfo.mintick * 10.0, swingAwayPts * scale) : swingAwayPts
+float effectiveRetestTolerance = isStock and autoScaleStocks ? math.max(syminfo.mintick * 5.0, retestTolerance * scale) : retestTolerance
+float effectiveLabelOffset = isStock and autoScaleStocks ? math.max(syminfo.mintick * 12.0, retestLabelOffset * scale) : retestLabelOffset
+
 // -------------------- Session state --------------------
 bool inAsia = not na(time(timeframe.period, asiaSession, tz))
-bool inLondon = not na(time(timeframe.period, londonWindow, tz))
 bool asiaStart = inAsia and not inAsia[1]
 bool asiaEnd = not inAsia and inAsia[1]
 
-// The Asia session is 00:00-07:00 London = 7 hours.
-// NQ/MNQ trade through this window. US stocks such as INTC do not.
-// Without a coverage check, TradingView can incorrectly treat only the final
-// after-hours bars as the "Asia range" and carry that false range into London.
 float tfSeconds = timeframe.in_seconds()
 int expectedAsiaBars = tfSeconds > 0 ? int(math.round(7.0 * 60.0 * 60.0 / tfSeconds)) : 0
 int minimumAsiaBars = expectedAsiaBars > 0 ? int(math.ceil(expectedAsiaBars * minAsiaCoveragePct / 100.0)) : 1
@@ -56,10 +72,8 @@ if asiaEnd
     asiaCoverageOK := not requireFullAsia or asiaBarCount >= minimumAsiaBars
     rangeReady := asiaCoverageOK
 
-// If the symbol has no proper 00:00-07:00 London market data, do not draw
-// a misleading Asia range or fire breakout/retest signals.
-float plottedAsiaHigh = (rangeReady or inAsia) and (not requireFullAsia or inAsia or asiaCoverageOK) ? asiaHigh : na
-float plottedAsiaLow = (rangeReady or inAsia) and (not requireFullAsia or inAsia or asiaCoverageOK) ? asiaLow : na
+float plottedAsiaHigh = rangeReady or inAsia ? asiaHigh : na
+float plottedAsiaLow = rangeReady or inAsia ? asiaLow : na
 
 plot(plottedAsiaHigh, "Asia High", color=color.new(color.green, 0), linewidth=2, style=plot.style_linebr)
 plot(plottedAsiaLow, "Asia Low", color=color.new(color.red, 0), linewidth=2, style=plot.style_linebr)
@@ -81,16 +95,13 @@ var int breakoutBar = na
 var bool movedAway = false
 var bool retestTriggered = false
 
-// Pullback candle state.
-// The RETEST label is NOT placed on this pullback candle.
-// It is placed only on the NEXT confirmation/continuation candle.
 var bool pullbackPending = false
 var int pullbackBar = na
 var float pullbackHigh = na
 var float pullbackLow = na
 
-bool londonStart = inLondon and not inLondon[1]
-if londonStart
+bool signalWindowStart = inSignalWindow and not inSignalWindow[1]
+if signalWindowStart
     breakoutTriggered := false
     breakoutDirection := 0
     breakoutBar := na
@@ -101,8 +112,9 @@ if londonStart
     pullbackHigh := na
     pullbackLow := na
 
-bool longBreak = rangeReady and asiaCoverageOK and inLondon and not breakoutTriggered and close > asiaHigh + bufferPts
-bool shortBreak = rangeReady and asiaCoverageOK and inLondon and not breakoutTriggered and close < asiaLow - bufferPts
+// First CLOSED candle beyond the Asia boundary + small symbol-aware buffer.
+bool longBreak = rangeReady and asiaCoverageOK and inSignalWindow and not breakoutTriggered and close > asiaHigh + effectiveBuffer
+bool shortBreak = rangeReady and asiaCoverageOK and inSignalWindow and not breakoutTriggered and close < asiaLow - effectiveBuffer
 
 if longBreak
     breakoutTriggered := true
@@ -117,54 +129,51 @@ if shortBreak
 plotshape(showImmediate and longBreak, title="Long Breakout Candle", style=shape.labeldown, location=location.abovebar, text="BREAKOUT\nCANDLE", color=color.new(color.green, 0), textcolor=color.white, size=size.tiny)
 plotshape(showImmediate and shortBreak, title="Short Breakout Candle", style=shape.labelup, location=location.belowbar, text="BREAKOUT\nCANDLE", color=color.new(color.red, 0), textcolor=color.white, size=size.tiny)
 
-// -------------------- Swing pullback -> confirmation retest --------------------
+// -------------------- Pullback -> confirmation retest --------------------
 bool afterBreakout = breakoutTriggered and not na(breakoutBar) and bar_index > breakoutBar
 
 if afterBreakout and not movedAway
-    if breakoutDirection == 1 and high >= asiaHigh + swingAwayPts
+    if breakoutDirection == 1 and high >= asiaHigh + effectiveSwingAway
         movedAway := true
-    if breakoutDirection == -1 and low <= asiaLow - swingAwayPts
+    if breakoutDirection == -1 and low <= asiaLow - effectiveSwingAway
         movedAway := true
 
 int barsAfterBreak = not na(breakoutBar) ? bar_index - breakoutBar : 0
-bool pullbackWindowOpen = breakoutTriggered and movedAway and not retestTriggered and inLondon and barsAfterBreak >= minRetestBars and barsAfterBreak <= maxRetestBars
+bool pullbackWindowOpen = breakoutTriggered and movedAway and not retestTriggered and inSignalWindow and barsAfterBreak >= minRetestBars and barsAfterBreak <= maxRetestBars
 
-// Confirmation must be the candle immediately AFTER the pullback/swing candle.
-bool longRetest = pullbackPending and breakoutDirection == 1 and bar_index == pullbackBar + 1 and close > open and close > pullbackHigh and close > asiaHigh + bufferPts
-bool shortRetest = pullbackPending and breakoutDirection == -1 and bar_index == pullbackBar + 1 and close < open and close < pullbackLow and close < asiaLow - bufferPts
+// Retest label goes on the candle AFTER the pullback candle,
+// only when that candle confirms continuation.
+bool longRetest = pullbackPending and breakoutDirection == 1 and bar_index == pullbackBar + 1 and close > open and close > pullbackHigh and close > asiaHigh + effectiveBuffer
+bool shortRetest = pullbackPending and breakoutDirection == -1 and bar_index == pullbackBar + 1 and close < open and close < pullbackLow and close < asiaLow - effectiveBuffer
 
 if longRetest or shortRetest
     retestTriggered := true
     pullbackPending := false
 
-// If the next candle did not confirm, release the candidate and allow a later swing pullback.
 if pullbackPending and bar_index > pullbackBar
     if not longRetest and not shortRetest
         pullbackPending := false
 
-// Find the swing pullback candle.
-// LONG: pullback reaches old Asia High area after price moved away.
-// SHORT: pullback reaches old Asia Low area after price moved away.
 if pullbackWindowOpen and not pullbackPending and not retestTriggered
-    if breakoutDirection == 1 and low <= asiaHigh + retestTolerance
+    if breakoutDirection == 1 and low <= asiaHigh + effectiveRetestTolerance
         pullbackPending := true
         pullbackBar := bar_index
         pullbackHigh := high
         pullbackLow := low
-    else if breakoutDirection == -1 and high >= asiaLow - retestTolerance
+    else if breakoutDirection == -1 and high >= asiaLow - effectiveRetestTolerance
         pullbackPending := true
         pullbackBar := bar_index
         pullbackHigh := high
         pullbackLow := low
 
-float longRetestY = longRetest ? low - retestLabelOffset : na
-float shortRetestY = shortRetest ? high + retestLabelOffset : na
+float longRetestY = longRetest ? low - effectiveLabelOffset : na
+float shortRetestY = shortRetest ? high + effectiveLabelOffset : na
 
 plotshape(showRetest ? longRetestY : na, title="Long Retest Confirmation Candle", style=shape.labelup, location=location.absolute, text="RETEST\nCANDLE", color=color.new(color.blue, 0), textcolor=color.white, size=size.tiny)
 plotshape(showRetest ? shortRetestY : na, title="Short Retest Confirmation Candle", style=shape.labeldown, location=location.absolute, text="RETEST\nCANDLE", color=color.new(color.orange, 0), textcolor=color.white, size=size.tiny)
 
 // Alerts
-alertcondition(longBreak, "NQ Asia High Breakout", "NQ: 5m close above Asia High")
-alertcondition(shortBreak, "NQ Asia Low Breakout", "NQ: 5m close below Asia Low")
-alertcondition(longRetest, "NQ Long Retest Confirmation", "NQ: bullish candle confirms Asia High swing retest")
-alertcondition(shortRetest, "NQ Short Retest Confirmation", "NQ: bearish candle confirms Asia Low swing retest")
+alertcondition(longBreak, "Asia High Breakout", "Price closed above Asia High")
+alertcondition(shortBreak, "Asia Low Breakout", "Price closed below Asia Low")
+alertcondition(longRetest, "Long Retest Confirmation", "Bullish candle confirms Asia High retest")
+alertcondition(shortRetest, "Short Retest Confirmation", "Bearish candle confirms Asia Low retest")
