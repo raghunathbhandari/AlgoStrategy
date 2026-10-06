@@ -62,8 +62,8 @@ if shortBreak
     breakoutDirection := -1
     breakoutBar := bar_index
 
-plotshape(showImmediate and longBreak, title="Immediate Long Breakout", style=shape.labelup, location=location.belowbar, text="BREAKOUT\nCANDLE", color=color.new(color.green, 0), textcolor=color.white, size=size.tiny)
-plotshape(showImmediate and shortBreak, title="Immediate Short Breakout", style=shape.labeldown, location=location.abovebar, text="BREAKOUT\nCANDLE", color=color.new(color.red, 0), textcolor=color.white, size=size.tiny)
+plotshape(showImmediate and longBreak, title="Immediate Long Breakout", style=shape.labeldown, location=location.abovebar, text="BREAKOUT\nCANDLE", color=color.new(color.green, 0), textcolor=color.white, size=size.tiny)
+plotshape(showImmediate and shortBreak, title="Immediate Short Breakout", style=shape.labelup, location=location.belowbar, text="BREAKOUT\nCANDLE", color=color.new(color.red, 0), textcolor=color.white, size=size.tiny)
 
 // -------------------- Retest entry --------------------
 var bool retestTriggered = false
