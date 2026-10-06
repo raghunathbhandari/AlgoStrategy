@@ -7,15 +7,15 @@ string asiaSession = input.session("0000-0700:23456", "Asia range")
 string londonWindow = input.session("0700-1200:23456", "London entry window")
 float bufferPts = input.float(2.0, "Breakout buffer (NQ points)", minval=0.0, step=0.25)
 
-int minRetestBars = input.int(3, "Minimum bars before retest", minval=2, maxval=20)
-int maxRetestBars = input.int(12, "Maximum bars before retest", minval=3, maxval=48)
-float swingAwayPts = input.float(10.0, "Minimum move away before retest", minval=1.0, step=0.25)
+int minRetestBars = input.int(3, "Minimum bars before pullback", minval=2, maxval=20)
+int maxRetestBars = input.int(12, "Maximum bars before pullback", minval=3, maxval=48)
+float swingAwayPts = input.float(10.0, "Minimum move away before pullback", minval=1.0, step=0.25)
 float retestTolerance = input.float(5.0, "Retest tolerance (points)", minval=0.0, step=0.25)
 float retestLabelOffset = input.float(12.0, "Retest label offset (points)", minval=1.0, step=1.0)
 
 bool showAsiaFill = input.bool(true, "Shade Asia session")
 bool showImmediate = input.bool(true, "Mark breakout candle")
-bool showRetest = input.bool(true, "Mark swing retest candle")
+bool showRetest = input.bool(true, "Mark confirmed retest candle")
 
 // -------------------- Session state --------------------
 bool inAsia = not na(time(timeframe.period, asiaSession, tz))
@@ -49,6 +49,14 @@ var int breakoutBar = na
 var bool movedAway = false
 var bool retestTriggered = false
 
+// Pullback candle state.
+// The RETEST label is NOT placed on this pullback candle.
+// It is placed only on the NEXT confirmation/continuation candle.
+var bool pullbackPending = false
+var int pullbackBar = na
+var float pullbackHigh = na
+var float pullbackLow = na
+
 bool londonStart = inLondon and not inLondon[1]
 if londonStart
     breakoutTriggered := false
@@ -56,6 +64,10 @@ if londonStart
     breakoutBar := na
     movedAway := false
     retestTriggered := false
+    pullbackPending := false
+    pullbackBar := na
+    pullbackHigh := na
+    pullbackLow := na
 
 bool longBreak = rangeReady and inLondon and not breakoutTriggered and close > asiaHigh + bufferPts
 bool shortBreak = rangeReady and inLondon and not breakoutTriggered and close < asiaLow - bufferPts
@@ -73,11 +85,7 @@ if shortBreak
 plotshape(showImmediate and longBreak, title="Long Breakout Candle", style=shape.labeldown, location=location.abovebar, text="BREAKOUT\nCANDLE", color=color.new(color.green, 0), textcolor=color.white, size=size.tiny)
 plotshape(showImmediate and shortBreak, title="Short Breakout Candle", style=shape.labelup, location=location.belowbar, text="BREAKOUT\nCANDLE", color=color.new(color.red, 0), textcolor=color.white, size=size.tiny)
 
-// -------------------- Swing retest candle --------------------
-// A valid retest must NOT be the next candle.
-// First, price must make a meaningful move away from the broken Asia level.
-// Then it must pull back to the broken level and reject/hold it.
-
+// -------------------- Swing pullback -> confirmation retest --------------------
 bool afterBreakout = breakoutTriggered and not na(breakoutBar) and bar_index > breakoutBar
 
 if afterBreakout and not movedAway
@@ -87,26 +95,44 @@ if afterBreakout and not movedAway
         movedAway := true
 
 int barsAfterBreak = not na(breakoutBar) ? bar_index - breakoutBar : 0
-bool retestWindowOpen = breakoutTriggered and movedAway and not retestTriggered and inLondon and barsAfterBreak >= minRetestBars and barsAfterBreak <= maxRetestBars
+bool pullbackWindowOpen = breakoutTriggered and movedAway and not retestTriggered and inLondon and barsAfterBreak >= minRetestBars and barsAfterBreak <= maxRetestBars
 
-// Long retest: pullback reaches the old Asia High area, closes back above it,
-// and the confirmation candle is bullish.
-// Short retest: pullback reaches the old Asia Low area, closes back below it,
-// and the confirmation candle is bearish.
-bool longRetest = retestWindowOpen and breakoutDirection == 1 and low <= asiaHigh + retestTolerance and close > asiaHigh + bufferPts and close > open
-bool shortRetest = retestWindowOpen and breakoutDirection == -1 and high >= asiaLow - retestTolerance and close < asiaLow - bufferPts and close < open
+// Confirmation must be the candle immediately AFTER the pullback/swing candle.
+bool longRetest = pullbackPending and breakoutDirection == 1 and bar_index == pullbackBar + 1 and close > open and close > pullbackHigh and close > asiaHigh + bufferPts
+bool shortRetest = pullbackPending and breakoutDirection == -1 and bar_index == pullbackBar + 1 and close < open and close < pullbackLow and close < asiaLow - bufferPts
 
 if longRetest or shortRetest
     retestTriggered := true
+    pullbackPending := false
+
+// If the next candle did not confirm, release the candidate and allow a later swing pullback.
+if pullbackPending and bar_index > pullbackBar
+    if not longRetest and not shortRetest
+        pullbackPending := false
+
+// Find the swing pullback candle.
+// LONG: pullback reaches old Asia High area after price moved away.
+// SHORT: pullback reaches old Asia Low area after price moved away.
+if pullbackWindowOpen and not pullbackPending and not retestTriggered
+    if breakoutDirection == 1 and low <= asiaHigh + retestTolerance
+        pullbackPending := true
+        pullbackBar := bar_index
+        pullbackHigh := high
+        pullbackLow := low
+    else if breakoutDirection == -1 and high >= asiaLow - retestTolerance
+        pullbackPending := true
+        pullbackBar := bar_index
+        pullbackHigh := high
+        pullbackLow := low
 
 float longRetestY = longRetest ? low - retestLabelOffset : na
 float shortRetestY = shortRetest ? high + retestLabelOffset : na
 
-plotshape(showRetest ? longRetestY : na, title="Long Swing Retest Candle", style=shape.labelup, location=location.absolute, text="RETEST\nCANDLE", color=color.new(color.blue, 0), textcolor=color.white, size=size.tiny)
-plotshape(showRetest ? shortRetestY : na, title="Short Swing Retest Candle", style=shape.labeldown, location=location.absolute, text="RETEST\nCANDLE", color=color.new(color.orange, 0), textcolor=color.white, size=size.tiny)
+plotshape(showRetest ? longRetestY : na, title="Long Retest Confirmation Candle", style=shape.labelup, location=location.absolute, text="RETEST\nCANDLE", color=color.new(color.blue, 0), textcolor=color.white, size=size.tiny)
+plotshape(showRetest ? shortRetestY : na, title="Short Retest Confirmation Candle", style=shape.labeldown, location=location.absolute, text="RETEST\nCANDLE", color=color.new(color.orange, 0), textcolor=color.white, size=size.tiny)
 
 // Alerts
 alertcondition(longBreak, "NQ Asia High Breakout", "NQ: 5m close above Asia High")
 alertcondition(shortBreak, "NQ Asia Low Breakout", "NQ: 5m close below Asia Low")
-alertcondition(longRetest, "NQ Long Swing Retest", "NQ: Asia High breakout swing retest continuation")
-alertcondition(shortRetest, "NQ Short Swing Retest", "NQ: Asia Low breakout swing retest continuation")
+alertcondition(longRetest, "NQ Long Retest Confirmation", "NQ: bullish candle confirms Asia High swing retest")
+alertcondition(shortRetest, "NQ Short Retest Confirmation", "NQ: bearish candle confirms Asia Low swing retest")
