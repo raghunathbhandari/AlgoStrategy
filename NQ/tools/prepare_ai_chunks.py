@@ -1,26 +1,27 @@
 #!/usr/bin/env python3
 """
-One-command VPS job for preparing AI-readable market-data chunks.
+One-command VPS job for preparing AI-readable CSV chunks in AlgoStrategy.
 
-Run from anywhere inside the cloned AlgoStrategy repository:
-    python NQ/tools/prepare_ai_chunks.py
+Run:
+    cd /root/trading/AlgoStrategy
+    python3 NQ/tools/prepare_ai_chunks.py
 
 What it does:
-1. Finds the AlgoStrategy repository root automatically.
-2. Downloads the known oversized NQ CSV into a Git-ignored staging folder.
-3. Chunks the oversized file into smaller monthly CSVs.
-4. Chunks large CSVs already stored in NQ/data.
-5. Writes manifests for AI/tools.
-6. Git-adds only the AI chunk outputs and scripts.
-7. Commits and pushes to origin/main when there are changes.
+1. Pulls latest origin/main.
+2. Downloads known oversized external CSVs into a Git-ignored staging folder.
+3. Recursively scans NQ/data and Backtesting for CSV files.
+4. Reads every qualifying CSV gradually/streaming.
+5. Splits files into fixed-size row chunks so AI/tools can read them easily.
+6. Preserves the source folder structure under AI_Chunks.
+7. Writes manifest.json for each source file.
+8. Git-adds only generated chunks + scripts.
+9. Commits and pushes the generated small files to origin/main.
 
-The oversized staging copy is NEVER added to Git.
-You can manually remove NQ/data/_raw_large next week.
+Original source CSVs are never modified or deleted.
 """
 
 from __future__ import annotations
 
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -28,77 +29,82 @@ from pathlib import Path
 THIS_FILE = Path(__file__).resolve()
 TOOLS_DIR = THIS_FILE.parent
 REPO_ROOT = TOOLS_DIR.parents[1]
+
 NQ_DATA = REPO_ROOT / "NQ" / "data"
+BACKTESTING_ROOT = REPO_ROOT / "Backtesting"
+
 RAW_DIR = NQ_DATA / "_raw_large"
-AI_ROOT = NQ_DATA / "AI_Chunks"
+AI_ROOT = REPO_ROOT / "AI_Chunks"
+
+# Process even moderately large files so examples like INTC 5m are included.
+MIN_SIZE_MB = 1.0
+ROWS_PER_CHUNK = 10_000
 
 sys.path.insert(0, str(TOOLS_DIR))
-from chunk_market_csv import download_stream, chunk_by_month, write_manifest, print_summary  # noqa: E402
+from chunk_market_csv import (  # noqa: E402
+    download_stream,
+    chunk_by_rows,
+    write_manifest,
+    print_summary,
+)
 
-
-# Known oversized source that GitHub cannot accept normally.
 REMOTE_SOURCES = [
     {
-        "name": "Dataset_NQ_1min_2022_2025",
+        "name": "NQ/data/external/Dataset_NQ_1min_2022_2025",
         "url": "https://github.com/s-k-28/nq-es-trader-5k-payout/blob/main/data/Dataset_NQ_1min_2022_2025.csv",
         "filename": "Dataset_NQ_1min_2022_2025.csv",
-        "date_column": None,
     },
 ]
 
-# Large CSVs already kept in AlgoStrategy/NQ/data that should also be
-# converted into AI-friendly monthly chunks when present on the VPS.
-LOCAL_SOURCES = [
-    {
-        "path": NQ_DATA / "NQ_1min_20260401_20260902.csv",
-        "name": "NQ_1min_20260401_20260902",
-        "date_column": None,
-    },
-    {
-        "path": NQ_DATA / "NQ_5min_20260120_20260415.csv",
-        "name": "NQ_5min_20260120_20260415",
-        "date_column": None,
-    },
+SCAN_ROOTS = [
+    NQ_DATA,
+    BACKTESTING_ROOT,
 ]
 
-COMMIT_MESSAGE = "Add AI-readable chunks for large NQ market data"
+COMMIT_MESSAGE = "Add AI-readable chunks for large market CSV files"
 
 
 def run(cmd: list[str], check: bool = True) -> subprocess.CompletedProcess:
     print("RUN | " + " ".join(cmd))
-    return subprocess.run(
-        cmd,
-        cwd=REPO_ROOT,
-        text=True,
-        check=check,
-    )
+    return subprocess.run(cmd, cwd=REPO_ROOT, text=True, check=check)
 
 
 def ensure_repo() -> None:
-    git_dir = REPO_ROOT / ".git"
-    if not git_dir.exists():
+    if not (REPO_ROOT / ".git").exists():
         raise RuntimeError(f"Not a Git repository: {REPO_ROOT}")
 
 
-def process_csv(source: Path, dataset_name: str, date_column: str | None = None) -> None:
-    if not source.exists():
+def rel_dataset_path(source: Path) -> Path:
+    """Mirror the source path below AI_Chunks, without the .csv suffix."""
+    try:
+        rel = source.resolve().relative_to(REPO_ROOT.resolve())
+        return rel.with_suffix("")
+    except ValueError:
+        return Path("external") / source.stem
+
+
+def process_csv(source: Path, output_rel: Path | None = None) -> None:
+    if not source.exists() or not source.is_file():
         print(f"SKIP | missing source | {source}")
         return
 
-    out_dir = AI_ROOT / dataset_name
+    if output_rel is None:
+        output_rel = rel_dataset_path(source)
+
+    out_dir = AI_ROOT / output_rel
     out_dir.mkdir(parents=True, exist_ok=True)
 
     print("")
     print("#" * 100)
-    print(f"PROCESS | {dataset_name}")
-    print(f"SOURCE  | {source}")
-    print(f"OUTPUT  | {out_dir}")
+    print(f"PROCESS | {source.relative_to(REPO_ROOT) if source.is_relative_to(REPO_ROOT) else source}")
+    print(f"SIZE    | {source.stat().st_size / (1024 * 1024):.2f} MB")
+    print(f"OUTPUT  | {out_dir.relative_to(REPO_ROOT)}")
     print("#" * 100)
 
-    result = chunk_by_month(
+    result = chunk_by_rows(
         source=source,
         output_dir=out_dir,
-        date_column=date_column,
+        rows_per_chunk=ROWS_PER_CHUNK,
         encoding="utf-8-sig",
     )
     manifest = write_manifest(source, out_dir, result)
@@ -116,29 +122,72 @@ def download_remote_sources() -> None:
         else:
             download_stream(item["url"], destination)
 
-        process_csv(
-            source=destination,
-            dataset_name=item["name"],
-            date_column=item.get("date_column"),
-        )
+        process_csv(destination, Path(item["name"]))
+
+
+def should_skip(path: Path) -> bool:
+    parts = set(path.parts)
+    return (
+        "AI_Chunks" in parts
+        or "_raw_large" in parts
+        or "_tmp" in parts
+        or ".git" in parts
+    )
+
+
+def discover_local_csvs() -> list[Path]:
+    found: list[Path] = []
+    minimum_bytes = int(MIN_SIZE_MB * 1024 * 1024)
+
+    for root in SCAN_ROOTS:
+        if not root.exists():
+            print(f"SCAN | folder not present | {root}")
+            continue
+
+        print(f"SCAN | {root.relative_to(REPO_ROOT)}")
+        for path in root.rglob("*.csv"):
+            if should_skip(path):
+                continue
+            try:
+                size = path.stat().st_size
+            except OSError as exc:
+                print(f"SKIP | cannot stat {path} | {exc}")
+                continue
+
+            if size >= minimum_bytes:
+                found.append(path)
+                print(
+                    f"FOUND | {path.relative_to(REPO_ROOT)} | "
+                    f"{size / (1024 * 1024):.2f} MB"
+                )
+
+    return sorted(set(found))
 
 
 def process_local_sources() -> None:
-    for item in LOCAL_SOURCES:
-        process_csv(
-            source=item["path"],
-            dataset_name=item["name"],
-            date_column=item.get("date_column"),
-        )
+    files = discover_local_csvs()
+
+    if not files:
+        print("SCAN | no local CSV files met the size threshold")
+        return
+
+    print(f"SCAN | {len(files)} CSV file(s) will be chunked")
+
+    for source in files:
+        try:
+            process_csv(source)
+        except Exception as exc:
+            # One unusual/bad CSV must not stop all the other datasets.
+            print(f"ERROR | {source} | {type(exc).__name__}: {exc}", file=sys.stderr)
 
 
 def git_publish() -> None:
-    # Safety: only stage the scripts, .gitignore and AI_Chunks.
+    # Only generated output and these helper files are staged.
     paths = [
         ".gitignore",
         "NQ/tools/chunk_market_csv.py",
         "NQ/tools/prepare_ai_chunks.py",
-        "NQ/data/AI_Chunks",
+        "AI_Chunks",
     ]
 
     run(["git", "add", "--"] + paths)
@@ -160,16 +209,17 @@ def git_publish() -> None:
 
 def main() -> int:
     print("=" * 100)
-    print("ALGO STRATEGY | LARGE CSV -> AI CHUNKS")
+    print("ALGO STRATEGY | ALL LARGE CSV -> AI CHUNKS")
     print("=" * 100)
-    print(f"Repo root : {REPO_ROOT}")
-    print(f"Raw stage : {RAW_DIR}")
-    print(f"AI chunks : {AI_ROOT}")
+    print(f"Repo root      : {REPO_ROOT}")
+    print(f"Scan roots     : NQ/data, Backtesting")
+    print(f"Minimum size   : {MIN_SIZE_MB:.1f} MB")
+    print(f"Rows per chunk : {ROWS_PER_CHUNK:,}")
+    print(f"Raw staging    : {RAW_DIR.relative_to(REPO_ROOT)}")
+    print(f"AI output      : {AI_ROOT.relative_to(REPO_ROOT)}")
     print("")
 
     ensure_repo()
-
-    # Pull first so the VPS works from the latest main branch.
     run(["git", "pull", "--ff-only", "origin", "main"])
 
     download_remote_sources()
@@ -179,8 +229,9 @@ def main() -> int:
     print("")
     print("=" * 100)
     print("DONE")
-    print(f"Large temporary originals remain only in: {RAW_DIR}")
-    print("They are Git-ignored and can be manually deleted later.")
+    print("Original CSV files were not changed.")
+    print(f"Temporary external originals remain in: {RAW_DIR.relative_to(REPO_ROOT)}")
+    print("You can manually remove that temporary folder later.")
     print("=" * 100)
     return 0
 
