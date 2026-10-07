@@ -1,0 +1,4 @@
+# Local/VPS-only large market data staging
+NQ/data/_raw_large/
+NQ/data/_tmp/
+*.part
