@@ -86,12 +86,12 @@ for i in range(149, len(hourly)):
     # F1: candle must not touch MA20
     f1 = not (r["high"] >= r["bb_mid"] and r["low"] <= r["bb_mid"])
 
-    # F2: at least 10% down through 150-bar swing range from the top
+    # F2: at least 15% down through 150-bar swing range from the top
     swing_range = r["high150"] - r["low150"]
     if not (swing_range > 0):
         continue
     swing_down = (r["high150"] - r["low"]) / swing_range
-    f2 = swing_down >= 0.10
+    f2 = swing_down >= 0.15
 
     # F3: latest 3 candles, at least 2 touch/near-touch lower BB
     start = max(0, i - 2)
