@@ -1,0 +1,41 @@
+{
+  "source_file": "/root/trading/AlgoStrategy/NQ/data/NQ_1min_20260401_20260902.csv",
+  "source_size_mb": 3.339,
+  "source_sha256": "1b182cd151bcc285c05f90037e9b5184e9a5436e903793637d6b43b7754c86b2",
+  "split_mode": "rows",
+  "rows_per_chunk": 10000,
+  "total_rows": 55440,
+  "skipped_rows": 0,
+  "files": [
+    {
+      "file": "NQ_1min_20260401_20260902_part_0001.csv",
+      "rows": 10000,
+      "size_mb": 0.602
+    },
+    {
+      "file": "NQ_1min_20260401_20260902_part_0002.csv",
+      "rows": 10000,
+      "size_mb": 0.604
+    },
+    {
+      "file": "NQ_1min_20260401_20260902_part_0003.csv",
+      "rows": 10000,
+      "size_mb": 0.607
+    },
+    {
+      "file": "NQ_1min_20260401_20260902_part_0004.csv",
+      "rows": 10000,
+      "size_mb": 0.659
+    },
+    {
+      "file": "NQ_1min_20260401_20260902_part_0005.csv",
+      "rows": 10000,
+      "size_mb": 0.595
+    },
+    {
+      "file": "NQ_1min_20260401_20260902_part_0006.csv",
+      "rows": 5440,
+      "size_mb": 0.324
+    }
+  ]
+}

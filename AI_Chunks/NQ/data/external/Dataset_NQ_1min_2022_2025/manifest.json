@@ -1,0 +1,536 @@
+{
+  "source_file": "/root/trading/AlgoStrategy/NQ/data/_raw_large/Dataset_NQ_1min_2022_2025.csv",
+  "source_size_mb": 69.163,
+  "source_sha256": "1577e60a7feab411e49da7a56c7052a64738cd1757cfd60aa11fd783ff43b60b",
+  "split_mode": "rows",
+  "rows_per_chunk": 10000,
+  "total_rows": 1048575,
+  "skipped_rows": 0,
+  "files": [
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0001.csv",
+      "rows": 10000,
+      "size_mb": 0.659
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0002.csv",
+      "rows": 10000,
+      "size_mb": 0.652
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0003.csv",
+      "rows": 10000,
+      "size_mb": 0.662
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0004.csv",
+      "rows": 10000,
+      "size_mb": 0.655
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0005.csv",
+      "rows": 10000,
+      "size_mb": 0.654
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0006.csv",
+      "rows": 10000,
+      "size_mb": 0.658
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0007.csv",
+      "rows": 10000,
+      "size_mb": 0.654
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0008.csv",
+      "rows": 10000,
+      "size_mb": 0.661
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0009.csv",
+      "rows": 10000,
+      "size_mb": 0.662
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0010.csv",
+      "rows": 10000,
+      "size_mb": 0.653
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0011.csv",
+      "rows": 10000,
+      "size_mb": 0.661
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0012.csv",
+      "rows": 10000,
+      "size_mb": 0.665
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0013.csv",
+      "rows": 10000,
+      "size_mb": 0.654
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0014.csv",
+      "rows": 10000,
+      "size_mb": 0.661
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0015.csv",
+      "rows": 10000,
+      "size_mb": 0.66
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0016.csv",
+      "rows": 10000,
+      "size_mb": 0.657
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0017.csv",
+      "rows": 10000,
+      "size_mb": 0.657
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0018.csv",
+      "rows": 10000,
+      "size_mb": 0.662
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0019.csv",
+      "rows": 10000,
+      "size_mb": 0.653
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0020.csv",
+      "rows": 10000,
+      "size_mb": 0.661
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0021.csv",
+      "rows": 10000,
+      "size_mb": 0.664
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0022.csv",
+      "rows": 10000,
+      "size_mb": 0.657
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0023.csv",
+      "rows": 10000,
+      "size_mb": 0.662
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0024.csv",
+      "rows": 10000,
+      "size_mb": 0.662
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0025.csv",
+      "rows": 10000,
+      "size_mb": 0.655
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0026.csv",
+      "rows": 10000,
+      "size_mb": 0.66
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0027.csv",
+      "rows": 10000,
+      "size_mb": 0.659
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0028.csv",
+      "rows": 10000,
+      "size_mb": 0.661
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0029.csv",
+      "rows": 10000,
+      "size_mb": 0.673
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0030.csv",
+      "rows": 10000,
+      "size_mb": 0.671
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0031.csv",
+      "rows": 10000,
+      "size_mb": 0.661
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0032.csv",
+      "rows": 10000,
+      "size_mb": 0.668
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0033.csv",
+      "rows": 10000,
+      "size_mb": 0.668
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0034.csv",
+      "rows": 10000,
+      "size_mb": 0.661
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0035.csv",
+      "rows": 10000,
+      "size_mb": 0.672
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0036.csv",
+      "rows": 10000,
+      "size_mb": 0.671
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0037.csv",
+      "rows": 10000,
+      "size_mb": 0.655
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0038.csv",
+      "rows": 10000,
+      "size_mb": 0.659
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0039.csv",
+      "rows": 10000,
+      "size_mb": 0.665
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0040.csv",
+      "rows": 10000,
+      "size_mb": 0.654
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0041.csv",
+      "rows": 10000,
+      "size_mb": 0.659
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0042.csv",
+      "rows": 10000,
+      "size_mb": 0.662
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0043.csv",
+      "rows": 10000,
+      "size_mb": 0.658
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0044.csv",
+      "rows": 10000,
+      "size_mb": 0.662
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0045.csv",
+      "rows": 10000,
+      "size_mb": 0.656
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0046.csv",
+      "rows": 10000,
+      "size_mb": 0.659
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0047.csv",
+      "rows": 10000,
+      "size_mb": 0.665
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0048.csv",
+      "rows": 10000,
+      "size_mb": 0.658
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0049.csv",
+      "rows": 10000,
+      "size_mb": 0.655
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0050.csv",
+      "rows": 10000,
+      "size_mb": 0.663
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0051.csv",
+      "rows": 10000,
+      "size_mb": 0.658
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0052.csv",
+      "rows": 10000,
+      "size_mb": 0.657
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0053.csv",
+      "rows": 10000,
+      "size_mb": 0.659
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0054.csv",
+      "rows": 10000,
+      "size_mb": 0.648
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0055.csv",
+      "rows": 10000,
+      "size_mb": 0.655
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0056.csv",
+      "rows": 10000,
+      "size_mb": 0.664
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0057.csv",
+      "rows": 10000,
+      "size_mb": 0.655
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0058.csv",
+      "rows": 10000,
+      "size_mb": 0.652
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0059.csv",
+      "rows": 10000,
+      "size_mb": 0.657
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0060.csv",
+      "rows": 10000,
+      "size_mb": 0.654
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0061.csv",
+      "rows": 10000,
+      "size_mb": 0.653
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0062.csv",
+      "rows": 10000,
+      "size_mb": 0.657
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0063.csv",
+      "rows": 10000,
+      "size_mb": 0.66
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0064.csv",
+      "rows": 10000,
+      "size_mb": 0.663
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0065.csv",
+      "rows": 10000,
+      "size_mb": 0.666
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0066.csv",
+      "rows": 10000,
+      "size_mb": 0.663
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0067.csv",
+      "rows": 10000,
+      "size_mb": 0.666
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0068.csv",
+      "rows": 10000,
+      "size_mb": 0.67
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0069.csv",
+      "rows": 10000,
+      "size_mb": 0.657
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0070.csv",
+      "rows": 10000,
+      "size_mb": 0.668
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0071.csv",
+      "rows": 10000,
+      "size_mb": 0.664
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0072.csv",
+      "rows": 10000,
+      "size_mb": 0.654
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0073.csv",
+      "rows": 10000,
+      "size_mb": 0.656
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0074.csv",
+      "rows": 10000,
+      "size_mb": 0.655
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0075.csv",
+      "rows": 10000,
+      "size_mb": 0.655
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0076.csv",
+      "rows": 10000,
+      "size_mb": 0.655
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0077.csv",
+      "rows": 10000,
+      "size_mb": 0.658
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0078.csv",
+      "rows": 10000,
+      "size_mb": 0.654
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0079.csv",
+      "rows": 10000,
+      "size_mb": 0.662
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0080.csv",
+      "rows": 10000,
+      "size_mb": 0.661
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0081.csv",
+      "rows": 10000,
+      "size_mb": 0.655
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0082.csv",
+      "rows": 10000,
+      "size_mb": 0.664
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0083.csv",
+      "rows": 10000,
+      "size_mb": 0.663
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0084.csv",
+      "rows": 10000,
+      "size_mb": 0.653
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0085.csv",
+      "rows": 10000,
+      "size_mb": 0.66
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0086.csv",
+      "rows": 10000,
+      "size_mb": 0.66
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0087.csv",
+      "rows": 10000,
+      "size_mb": 0.652
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0088.csv",
+      "rows": 10000,
+      "size_mb": 0.654
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0089.csv",
+      "rows": 10000,
+      "size_mb": 0.658
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0090.csv",
+      "rows": 10000,
+      "size_mb": 0.646
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0091.csv",
+      "rows": 10000,
+      "size_mb": 0.657
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0092.csv",
+      "rows": 10000,
+      "size_mb": 0.661
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0093.csv",
+      "rows": 10000,
+      "size_mb": 0.652
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0094.csv",
+      "rows": 10000,
+      "size_mb": 0.657
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0095.csv",
+      "rows": 10000,
+      "size_mb": 0.656
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0096.csv",
+      "rows": 10000,
+      "size_mb": 0.652
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0097.csv",
+      "rows": 10000,
+      "size_mb": 0.657
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0098.csv",
+      "rows": 10000,
+      "size_mb": 0.659
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0099.csv",
+      "rows": 10000,
+      "size_mb": 0.665
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0100.csv",
+      "rows": 10000,
+      "size_mb": 0.672
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0101.csv",
+      "rows": 10000,
+      "size_mb": 0.669
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0102.csv",
+      "rows": 10000,
+      "size_mb": 0.664
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0103.csv",
+      "rows": 10000,
+      "size_mb": 0.675
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0104.csv",
+      "rows": 10000,
+      "size_mb": 0.666
+    },
+    {
+      "file": "Dataset_NQ_1min_2022_2025_part_0105.csv",
+      "rows": 8575,
+      "size_mb": 0.569
+    }
+  ]
+}
