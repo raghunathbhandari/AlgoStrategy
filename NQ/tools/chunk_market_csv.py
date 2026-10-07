@@ -169,6 +169,15 @@ def detect_date_column(fieldnames: List[str], requested: Optional[str]) -> str:
         if candidate.lower() in lower_map:
             return lower_map[candidate.lower()]
 
+    # Fallback for unusual headers used by downloaded market datasets.
+    # Prefer columns whose names contain a time/date hint.
+    hinted = [
+        name for name in fieldnames
+        if any(token in name.lower() for token in ("date", "time", "stamp"))
+    ]
+    if hinted:
+        return hinted[0]
+
     raise ValueError(
         "Could not detect datetime column. "
         "Use --date-column. Columns: " + ", ".join(fieldnames)
