@@ -1,0 +1,29 @@
+# RUDRA REVERSAL — NEXT SESSION HANDOFF (2026-10-08)
+
+**Start here.** The canonical project folder for versioned Rudra Reversal work is `NQ/rudra-reversal/`.
+
+## Version separation
+
+**Rudra-Reversal-1.0 — LOCKED**: [Rules](Rudra-Reversal-1.0.md) | [Frozen Python](rudra_reversal_1_0.py)
+- Canonical engine: `NQ/backtesting/rudra_reversal_nq_1h.py`, unchanged.
+- Source data: `NQ/data/recent/NQ_1h_12m_2025-10-07_2026-10-07.csv`
+- Benchmark: 136 closed, 101 wins, 35 losses, 74.2647% win rate, +33.5512% compounded. One end-of-data open trade excluded.
+- September 2026: 16 trades, 13 wins, 3 losses, +6.3127% compounded.
+- Locked rules include BB20 2std ddof0, lower-band near touch (2 of last 3), 150-bar 20% depth, one long at a time, upper-band exit. No fixed SL, RSI or MA20-touch requirements.
+- Never edit its code or overwrite the canonical ledger to try v2.0.
+
+**Rudra-Reversal-2.0 — EXPERIMENTAL**: [Rules](Rudra-Reversal-2.0.md) | [Combined Python](rudra_reversal_2_0.py)
+- Filter 5: Narrow BBW (trailing 150-bar lowest 20%) **AND** MA20 10-bar slope between -0.05% and +0.05% => reject new BUY. Negative meaningful slope does not automatically fail.
+- Filter 6: Last 60 bars, confirmed swing pivots using 3-left/3-right. Swing high / low define 0%-100% range; entry in upper 50% => reject candidate. Current prototype uses highest confirmed pivot high and lowest confirmed pivot low within window.
+- Known issue: swing box can shift when prior pivots leave window, or entry falls outside 0–100%. Need better stable S/R box and breakout invalidation. No lookahead.
+- Separate v2 runner recomputes trades after filtering and writes outputs to `NQ/backtesting/results/rudra_reversal_2_0/`. Does not overwrite v1.
+- Filter 5 alone September: 15 trades, 12 wins, 3 losses, +5.8728%, **below v1**. Combined Filters 5+6 has not been verified yet.
+- September chart review: 8 Sep 10:00/15:00/21:00 were at 76.1%/70.8%/65.3% of prototype 60-bar box (BAD candidates). Better entries on 15–17 Sep should be protected.
+
+## Next session work
+1. Run v2 combined Python and inspect September 2026 ONLY until user approves.
+2. Audit every entry: UK time, BBW, slope, swing high/low, midpoint, entry swing%, Filter 5/6 classification, actual P/L, and replacement entries.
+3. Review 8–10 Sep range and 15–17 Sep trend, adjust causal swing selection without overfitting.
+4. Never promote v2 to live or call it locked without explicit user decision.
+
+Charts: entry yellow triangle, exit purple X; labels must be legible. User prefers concise English and per-entry tables.
