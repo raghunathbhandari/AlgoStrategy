@@ -1,6 +1,6 @@
 # Rudra-Reversal NQ 1H — Canonical Locked Strategy
 
-This document is the permanent reference for future AI sessions.
+This is the permanent strategy and reproducibility guide for future AI sessions.
 
 ## Final locked rules
 
@@ -10,176 +10,98 @@ This document is the permanent reference for future AI sessions.
 | Timeframe | **1H** |
 | Direction | **LONG only** |
 | Bollinger Band | **20-period SMA, 2.0 StdDev** |
-| Lower BB entry | At least **2 of last 3 candles** touch Lower BB or come within **0.15%** |
-| 150-bar range | Highest **HIGH** and lowest **LOW** of last 150 candles |
+| StdDev convention | **Population StdDev, ddof=0** |
+| Lower BB entry | Current candle must touch/near-touch Lower BB and at least **2 of last 3 candles** must touch/near-touch |
+| Lower-BB tolerance | **0.15% above Lower BB** |
+| 150-bar range | Highest **HIGH** and lowest **LOW** of last 150 candles, including signal candle |
 | Depth measure | Use **signal candle CLOSE** |
 | Minimum depth | **20% down from 150-bar top** |
 | MA20 touch | **Removed** |
 | RSI | **Removed** |
+| Entry fill | **Signal candle CLOSE** |
 | Position count | **One trade at a time** |
-| Exit | Upper BB touch or within **0.15% below Upper BB** |
+| Exit trigger | First later candle touching Upper BB or within **0.15% below Upper BB** |
+| Exit fill | If HIGH reaches Upper BB: fill at **Upper BB**. If only near-touch: fill at **candle HIGH** |
 | Session | Full available **overnight/premarket + regular session** |
 | Time shown | **UK time / Europe-London** |
+| End-of-data open trade | Preserve separately; **exclude from closed-trade benchmark** |
 
-## Historical benchmark checksum
+## Recovered historical implementation
 
-The previous latest-1-year benchmark run produced:
+The exact execution semantics were recovered from Git history on 2026-10-08 from the earlier Rudra-Reversal chart/backtest engine in commit:
 
-- Period: **2025-10-07 to 2026-10-07**
-- Trades: **136**
-- Wins: **101**
-- Losses: **35**
-- Win rate: **74.3%**
-- Compounded return: **+33.55%**
-- Average trade: **about +0.22%**
-- Best trade: **+1.68%**
-- Worst trade: **-3.29%**
-- Starting-capital example: **$10,000**
-- Ending-capital benchmark: **$13,355**
-- Net-profit benchmark: **+$3,355**
+`25e81b7e99560bf6cac66d15eb59c94266cf7b7a`
 
-Weak months previously identified:
-- **November 2025**
-- **March 2026**
-- **July 2026**
+The historical file was:
 
-## Mandatory validation gate
+`NQ/tools/make_nq_2025_monthly_bb_charts.py`
 
-Before any future AI session changes, optimizes, or interprets this strategy:
+That code established the missing mechanics:
+- `rolling(20).std(ddof=0)`
+- near-lower and near-upper tolerance measured relative to the BB value
+- entry at signal candle close
+- exact Upper-BB exit filled at the Upper-BB value
+- near-touch exit filled at candle high
+- next signal allowed only after the prior trade exits
 
-1. Load the saved 1H NQ dataset.
-2. Run the canonical backtest implementation.
-3. Confirm the historical checksum:
-   - 136 trades
-   - 101 wins
-   - 35 losses
-   - 74.3% win rate
-   - +33.55% compounded return
-4. If the checksum does not match, **do not tune the strategy rules**.
-5. Investigate only execution semantics until the benchmark is reproduced.
+The final rule changes applied on top of that historical engine are:
+- depth = **20%**
+- depth uses **signal CLOSE**
+- **MA20 filter removed**
+- **RSI removed**
 
-Execution details to verify first:
-- Bollinger StdDev convention
-- exact 0.15% Lower-BB tolerance interpretation
-- exact 0.15% Upper-BB tolerance interpretation
-- signal-bar inclusion in rolling windows
-- entry fill price and timing
-- exit fill price and timing
-- treatment of incomplete / zero-volume overnight bars
-- end-of-file handling for an open trade
+## Exact benchmark — CHECKSUM PASS
 
-Only after the checksum is reproduced may a rerun be called canonical.
-
-## Standard detailed report flow
-
-Every 1-year Rudra-Reversal report should include the following sections.
-
-### 1. Strategy validation
-- Dataset period and row count
-- Locked-rule version
-- Benchmark checksum match: PASS / FAIL
-- Any unresolved execution-semantic differences
-
-### 2. Trade statistics
-- Total trades
-- Wins
-- Losses
-- Win rate
-- Average trade return
-- Best trade
-- Worst trade
-
-### 3. Capital report
-Default capital example: **$10,000** unless the user specifies otherwise.
-
-Report:
-- Starting capital
-- Ending capital
-- Net profit in dollars
-- Compounded return %
-- Simple return %
-- Monthly compounded returns
-- Best month
-- Worst month
-
-### 4. Risk report
-Report:
-- Profit factor
-- Maximum drawdown %
-- Maximum drawdown $
-- Maximum losing streak
-- Average winning trade %
-- Average losing trade %
-- Win/loss payoff ratio
-- Expectancy per trade %
-- Return / max-drawdown ratio
-
-Important: the locked Rudra-Reversal strategy has **no separate fixed stop-loss rule**. Therefore maximum drawdown, worst trade, losing streak, and time in trade are mandatory risk fields.
-
-### 5. Holding-period report
-Report:
-- Average holding hours
-- Median holding hours
-- Minimum holding hours
-- Maximum holding hours
-- Average winning-trade holding time
-- Average losing-trade holding time
-- Same-session exits
-- Overnight/multi-session exits
-- Longest-held trade details
-
-### 6. Monthly/regime review
-Always identify weak months and inspect them for market-condition clues.
-
-Current historical weak months:
-- November 2025
-- March 2026
-- July 2026
-
-Do not add filters merely because a weak month exists. Study regime first.
-
-### 7. Trade ledger
-Preserve a CSV containing at least:
-- entry UK timestamp
-- exit UK timestamp
-- entry price
-- exit price
-- trade return %
-- holding hours
-- win/loss
-- signal depth
-- Lower-BB touch count
-- 150-bar high/low
-- relevant BB values
-
-The ledger is required for reproducible Profit Factor, Max Drawdown, and holding-period statistics.
-
-## Important reproducibility rule
-
-Do **not** change the strategy rules simply to force the benchmark.
-
-If a fresh implementation does not reproduce the checksum, first investigate execution details. Only after those execution semantics are matched should a new run replace the historical benchmark.
-
-## Files
-
-Backtest implementation:
-
-`NQ/backtesting/rudra_reversal_nq_1h.py`
-
-Canonical strategy + workflow guide:
-
-`NQ/backtesting/RUDRA_REVERSAL_NQ_1H_LOCKED.md`
-
-Latest 1-year benchmark report:
-
-`NQ/backtesting/RUDRA_REVERSAL_NQ_1H_1Y_REPORT.md`
-
-Default source data:
-
+Source:
 `NQ/data/recent/NQ_1h_12m_2025-10-07_2026-10-07.csv`
 
-Expected trade ledger output:
+Period:
+**2025-10-07 to 2026-10-07**
 
+| Metric | Exact result |
+|---|---:|
+| Closed trades | **136** |
+| Wins | **101** |
+| Losses | **35** |
+| Win rate | **74.2647%** |
+| Simple return | **+29.4701%** |
+| Compounded return | **+33.5512%** |
+| Best trade | **+1.6786%** |
+| Worst trade | **-3.2936%** |
+| Open trade at data end | **1 — excluded from benchmark** |
+
+The month-by-month counts also match the historical benchmark exactly:
+Oct-2025 3, Nov 9, Dec 18, Jan-2026 11, Feb 13, Mar 12, Apr 8, May 6, Jun 11, Jul 12, Aug 15, Sep 16, Oct-2026 2.
+
+## Standard workflow for every future AI session
+
+1. Read this guide first.
+2. Use the canonical source data or a clearly named newer dataset.
+3. Run `NQ/backtesting/rudra_reversal_nq_1h.py`.
+4. For the historical one-year source, require the hard checksum PASS:
+   - 136 closed trades
+   - 101 wins
+   - 35 losses
+   - 74.2647% win rate
+   - +33.5512% compounded return
+5. Do not alter locked strategy rules to make results fit.
+6. Save the exact closed-trade ledger.
+7. Preserve any end-of-data open trade separately.
+8. Generate capital, Profit Factor, drawdown, expectancy, losing-streak, holding-period and monthly reports from the saved ledger.
+9. Only create a new strategy version if the user explicitly changes a rule.
+
+## Canonical files
+
+Backtest:
+`NQ/backtesting/rudra_reversal_nq_1h.py`
+
+Exact 136-trade ledger:
 `NQ/backtesting/results/rudra_reversal_nq_1h_trades.csv`
 
-This strategy definition is **locked** unless the user explicitly asks to create a new version.
+One-year report:
+`NQ/backtesting/RUDRA_REVERSAL_NQ_1H_1Y_REPORT.md`
+
+Source data:
+`NQ/data/recent/NQ_1h_12m_2025-10-07_2026-10-07.csv`
+
+This strategy is **locked** unless the user explicitly asks to create a revised version.
