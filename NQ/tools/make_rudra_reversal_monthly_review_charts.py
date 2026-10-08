@@ -1,114 +1,177 @@
 #!/usr/bin/env python3
+"""Version 3: twelve-page Rudra Reversal review PDF. Plot only; never recalculate trades."""
 from pathlib import Path
-import numpy as np, pandas as pd
+import sys
+import numpy as np
+import pandas as pd
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from matplotlib.patches import Rectangle
+from matplotlib.backends.backend_pdf import PdfPages
+from matplotlib.patches import Rectangle, ConnectionPatch
+from matplotlib.lines import Line2D
 
-ROOT=Path(__file__).resolve().parents[2]
-SRC=ROOT/"NQ/data/recent/NQ_1h_12m_2025-10-07_2026-10-07.csv"
-OUT=ROOT/"NQ/reports/rudra_reversal_1y_monthly"
-OUT.mkdir(parents=True,exist_ok=True)
+ROOT = Path(__file__).resolve().parents[2]
+OUT = ROOT / "NQ/reports/rudra_reversal_1y_monthly"
+SRC = ROOT / "NQ/data/recent/NQ_1h_12m_2025-10-07_2026-10-07.csv"
+LEDGER = OUT / "trade_ledger_chart_ids.csv"
+MANIFEST = OUT / "monthly_manifest.csv"
+PDF = OUT / "NQ_Rudra_Reversal_12_Month_Chart_Review_Outside_Labels.pdf"
+
+def uk(series):
+    return pd.to_datetime(series, utc=True, errors="raise").dt.tz_convert("Europe/London")
+
+def label_positions(events, rows=6, spacing=12):
+    """Allocate each label a separate lane when horizontally close; no label overlap."""
+    lanes=[-1e9]*rows
+    placed={}
+    for event in sorted(events, key=lambda x:(x["x"],x["id"])):
+        x=event["x"]
+        possible=[k for k in range(rows) if x-lanes[k]>=spacing]
+        if not possible:
+            raise RuntimeError(f"Too many clustered labels around bar {x}; add label rows")
+        k=min(possible, key=lambda j:(lanes[j],j))
+        lanes[k]=x
+        placed[event["id"]]=k
+    return placed
 
 df=pd.read_csv(SRC)
-df["timestamp_uk"]=pd.to_datetime(df["timestamp_uk"],utc=True,errors="coerce").dt.tz_convert("Europe/London")
-for c in ["open","high","low","close"]: df[c]=pd.to_numeric(df[c],errors="coerce")
-df=df.dropna(subset=["timestamp_uk","open","high","low","close"]).sort_values("timestamp_uk").reset_index(drop=True)
+df["t"]=uk(df["timestamp_uk"])
+for c in ("open","high","low","close"):
+    df[c]=pd.to_numeric(df[c],errors="raise")
+df=df.sort_values("t").reset_index(drop=True)
+df["bb_middle"]=df["close"].rolling(20).mean()
+sd=df["close"].rolling(20).std(ddof=0)
+df["bb_upper"]=df["bb_middle"]+2*sd
+df["bb_lower"]=df["bb_middle"]-2*sd
 
-df["bb_mid"]=df["close"].rolling(20).mean()
-df["bb_std"]=df["close"].rolling(20).std(ddof=0)
-df["bb_upper"]=df["bb_mid"]+2*df["bb_std"]
-df["bb_lower"]=df["bb_mid"]-2*df["bb_std"]
-df["high150"]=df["high"].rolling(150).max()
-df["low150"]=df["low"].rolling(150).min()
-df["depth"]=(df["high150"]-df["close"])/(df["high150"]-df["low150"])
-df["near_lower"]=(df["low"]<=df["bb_lower"])|(((df["low"]-df["bb_lower"])/df["bb_lower"])<=0.0015)
-df["near_upper"]=(df["high"]>=df["bb_upper"])|(((df["bb_upper"]-df["high"])/df["bb_upper"])<=0.0015)
-df["touch3"]=df["near_lower"].astype(int).rolling(3).sum()
-df["signal"]=df["near_lower"]&(df["touch3"]>=2)&(df["depth"]>=0.20)
+tr=pd.read_csv(LEDGER)
+required={"trade_no","i","entry_time","entry_price","j","exit_time","exit_price","return_pct"}
+assert required.issubset(tr.columns), "Canonical ledger columns missing"
+assert len(tr)==136 and (tr.return_pct>0).sum()==101 and (tr.return_pct<0).sum()==35, "136/101/35 checksum failure"
+assert sorted(tr.trade_no.astype(int).tolist())==list(range(1,137)), "Trade numbers changed"
+tr["ent"]=uk(tr["entry_time"])
+tr["ext"]=uk(tr["exit_time"])
+# Exact canonical candle position and fill checks, with no strategy recalculation.
+for t in tr.itertuples():
+    i,j=int(t.i),int(t.j)
+    assert 0<=i<j<len(df), f"bad candle index {t.trade_no}"
+    assert df.at[i,"t"]==t.ent and df.at[j,"t"]==t.ext, f"timestamp mismatch {t.trade_no}"
+    assert np.isclose(df.at[i,"close"],t.entry_price,atol=1e-6), f"entry price mismatch {t.trade_no}"
+    assert df.at[j,"low"]-0.01 <=t.exit_price<=df.at[j,"high"]+0.01, f"exit outside candle {t.trade_no}"
+    assert np.isclose((t.exit_price/t.entry_price-1)*100,t.return_pct,atol=1e-6), f"return mismatch {t.trade_no}"
 
-signals=[]
-for i in range(149,len(df)):
-    r=df.iloc[i]
-    if bool(r["signal"]):
-        signals.append({"i":i,"entry_time":r["timestamp_uk"],"entry_price":float(r["close"])})
+manifest=pd.read_csv(MANIFEST)
+months=pd.period_range("2025-10","2026-09",freq="M")
+assert all(str(p) in set(manifest.month) for p in months)
+plt.rcParams.update({"font.size":9,"font.family":"DejaVu Sans","pdf.fonttype":42})
+count_entries=0; count_exits=0
 
-trades=[]; missed=[]; next_allowed=0; trade_no=0; open_trade=None
-for s in signals:
-    if s["i"]<next_allowed:
-        missed.append(s); continue
-    trade_no+=1
-    ex=None
-    for j in range(s["i"]+1,len(df)):
-        r=df.iloc[j]
-        if bool(r["near_upper"]):
-            exact=bool(r["high"]>=r["bb_upper"])
-            px=float(r["bb_upper"] if exact else r["high"])
-            ex={"j":j,"exit_time":r["timestamp_uk"],"exit_price":px,"return_pct":(px/s["entry_price"]-1)*100}
-            break
-    if ex:
-        trades.append({"trade_no":trade_no,**s,**ex})
-        next_allowed=ex["j"]+1
-    else:
-        open_trade={"trade_no":trade_no,**s}
-        next_allowed=len(df)
+with PdfPages(PDF,metadata={"Title":"NQ Rudra Reversal 1H - 12 Month Chart Review - Outside Labels V3"}) as pdf:
+    for page,p in enumerate(months,1):
+        start=pd.Timestamp(p.start_time,tz="Europe/London")
+        end=start+pd.DateOffset(months=1)
+        month=df[(df.t>=start)&(df.t<end)].copy()
+        assert len(month)>50, f"Insufficient candles {p}"
+        gindex=month.index.to_numpy()
+        start_i=int(gindex[0]); end_i=int(gindex[-1])
+        entry=tr[(tr.ent>=start)&(tr.ent<end)].copy()
+        exits=tr[(tr.ext>=start)&(tr.ext<end)].copy()
+        mrow=manifest[manifest.month==str(p)].iloc[0]
+        assert len(entry)==int(mrow.entries), f"manifest entry count mismatch {p}"
+        assert int((entry.return_pct>0).sum())==int(mrow.wins)
+        assert int((entry.return_pct<0).sum())==int(mrow.losses)
+        count_entries+=len(entry);count_exits+=len(exits)
+        n=len(month)
+        fig=plt.figure(figsize=(20,12),facecolor="white")
+        gs=fig.add_gridspec(nrows=4,ncols=1,height_ratios=[2.5,7.1,2.5,.8],
+                           left=.06,right=.985,top=.92,bottom=.07,hspace=.09)
+        top=fig.add_subplot(gs[0]); ax=fig.add_subplot(gs[1],sharex=top)
+        bot=fig.add_subplot(gs[2],sharex=top)
+        notes=fig.add_subplot(gs[3])
+        fig.suptitle(f"NQ 1H | Rudra Reversal | {p.strftime('%B %Y')} | Page {page}/12",
+                     x=.06,y=.975,ha="left",fontsize=17,fontweight="bold")
+        w=int((entry.return_pct>0).sum()); l=int((entry.return_pct<0).sum())
+        fig.text(.985,.967,f"Entries: {len(entry)}   Wins: {w}   Losses: {l}   Exits this month: {len(exits)}",
+                 ha="right",fontsize=10)
+        x=np.arange(n)
+        for k,r in enumerate(month.itertuples()):
+            color="#17985c" if r.close>=r.open else "#d63e43"
+            ax.vlines(k,r.low,r.high,color=color,lw=.64,zorder=2)
+            bottom=min(r.open,r.close); height=max(abs(r.close-r.open),.2)
+            ax.add_patch(Rectangle((k-.33,bottom),.66,height,facecolor=color,
+                                  edgecolor=color,linewidth=.3,zorder=3))
+        ax.plot(x,month.bb_upper.to_numpy(),color="#2564bc",lw=1.0,zorder=4)
+        ax.plot(x,month.bb_middle.to_numpy(),color="#7b838e",lw=.9,zorder=4)
+        ax.plot(x,month.bb_lower.to_numpy(),color="#8951ac",lw=1.0,zorder=4)
+        ax.set_xlim(-4,n+3)
+        lo=float(np.nanmin(month[["low","bb_lower"]].to_numpy()))
+        hi=float(np.nanmax(month[["high","bb_upper"]].to_numpy()))
+        d=max(hi-lo,1); ax.set_ylim(lo-.06*d,hi+.06*d)
+        ax.set_ylabel("NQ price",fontsize=10)
+        ax.grid(alpha=.12,lw=.45)
+        ax.yaxis.set_major_formatter(matplotlib.ticker.StrMethodFormatter("{x:,.0f}"))
+        ax.tick_params(labelsize=8)
+        ticks=np.linspace(0,n-1,9,dtype=int)
+        ax.set_xticks(ticks)
+        ax.set_xticklabels([month.iloc[k].t.strftime("%d %b\n%H:%M") for k in ticks],fontsize=8)
+        ax.tick_params(axis="x",pad=5)
 
-tdf=pd.DataFrame(trades)
-mdf=pd.DataFrame(missed)
-if len(tdf)!=136 or int((tdf["return_pct"]>0).sum())!=101:
-    raise RuntimeError("Benchmark checksum failed")
-
-# Exact benchmark touches 13 calendar months; generate all 13 so no trade is omitted.
-periods=pd.period_range("2025-10","2026-10",freq="M")
-manifest=[]
-for p in periods:
-    start=pd.Timestamp(p.start_time,tz="Europe/London")
-    end=pd.Timestamp(p.end_time,tz="Europe/London")
-    m=df[(df["timestamp_uk"]>=start)&(df["timestamp_uk"]<=end)].copy().reset_index(drop=True)
-    if m.empty: continue
-    pos={ts:i for i,ts in enumerate(m["timestamp_uk"])}
-    fig,ax=plt.subplots(figsize=(12,4.8),dpi=90)
-    for i,r in m.iterrows():
-        ax.vlines(i,r["low"],r["high"],linewidth=.55)
-        lo=min(r["open"],r["close"]); h=max(abs(r["close"]-r["open"]),.2)
-        ax.add_patch(Rectangle((i-.28,lo),.56,h,fill=False,linewidth=.65))
-    x=np.arange(len(m))
-    ax.plot(x,m["bb_upper"],linewidth=.9,label="BB Upper")
-    ax.plot(x,m["bb_mid"],linewidth=.8,label="BB Mid")
-    ax.plot(x,m["bb_lower"],linewidth=.9,label="BB Lower")
-
-    ent=tdf[(tdf["entry_time"]>=start)&(tdf["entry_time"]<=end)]
-    ext=tdf[(tdf["exit_time"]>=start)&(tdf["exit_time"]<=end)]
-    for _,t in ent.iterrows():
-        if t["entry_time"] in pos:
-            xx=pos[t["entry_time"]]; yy=t["entry_price"]
-            ax.scatter(xx,yy,marker="^",s=38,zorder=5)
-            ax.annotate(f"T{int(t['trade_no'])}",(xx,yy),xytext=(0,-12),textcoords="offset points",ha="center",fontsize=6)
-    for _,t in ext.iterrows():
-        if t["exit_time"] in pos:
-            xx=pos[t["exit_time"]]; yy=t["exit_price"]
-            ax.scatter(xx,yy,marker="v",s=38,zorder=5)
-            ax.annotate(f"T{int(t['trade_no'])}",(xx,yy),xytext=(0,8),textcoords="offset points",ha="center",fontsize=6)
-    if not mdf.empty:
-        mm=mdf[(mdf["entry_time"]>=start)&(mdf["entry_time"]<=end)]
-        for _,s in mm.iterrows():
-            if s["entry_time"] in pos:
-                ax.scatter(pos[s["entry_time"]],s["entry_price"],marker="x",s=16,zorder=4)
-
-    if open_trade and start<=open_trade["entry_time"]<=end and open_trade["entry_time"] in pos:
-        xx=pos[open_trade["entry_time"]]; yy=open_trade["entry_price"]
-        ax.scatter(xx,yy,marker="^",s=46,zorder=6)
-        ax.annotate(f"T{open_trade['trade_no']}-OPEN",(xx,yy),xytext=(0,-12),textcoords="offset points",ha="center",fontsize=6)
-
-    ti=np.linspace(0,len(m)-1,min(10,len(m)),dtype=int)
-    ax.set_xticks(ti); ax.set_xticklabels(m.iloc[ti]["timestamp_uk"].dt.strftime("%d-%b"),rotation=45,ha="right",fontsize=7)
-    wins=int((ent["return_pct"]>0).sum()); losses=int((ent["return_pct"]<0).sum())
-    ax.set_title(f"NQ 1H Rudra-Reversal | {p} | Entries {len(ent)} | W {wins} L {losses}",fontsize=9)
-    ax.grid(alpha=.18); ax.legend(fontsize=7,loc="best"); ax.set_ylabel("Price")
-    fig.tight_layout()
-    f=OUT/f"{p}.png"; fig.savefig(f,dpi=90,bbox_inches="tight"); plt.close(fig)
-    manifest.append({"month":str(p),"entries":len(ent),"wins":wins,"losses":losses,"file":f.name})
-
-tdf.to_csv(OUT/"trade_ledger_chart_ids.csv",index=False)
-mdf.to_csv(OUT/"missed_raw_signals.csv",index=False)
-pd.DataFrame(manifest).to_csv(OUT/"monthly_manifest.csv",index=False)
-print("generated",len(manifest),"charts")
+        top.set_ylim(0,1);bot.set_ylim(0,1)
+        for a in (top,bot):
+            a.set_yticks([])
+            a.tick_params(axis="x",which="both",bottom=False,labelbottom=False)
+            a.set_facecolor("#f8f9fc")
+            for sp in a.spines.values():sp.set_visible(False)
+        top.text(.006,.95,"BUY labels (UK time)  |  yellow triangle = entry close",
+                 transform=top.transAxes,va="top",fontsize=9,color="#4b5563")
+        bot.text(.006,.05,"SELL labels (UK time)  |  purple X = win; red X = loss",
+                 transform=bot.transAxes,va="bottom",fontsize=9,color="#4b5563")
+        buys=[{"id":int(t.trade_no),"x":int(t.i)-start_i,"y":float(t.entry_price),
+               "color":"#111827","time":t.ent} for t in entry.itertuples()]
+        sells=[{"id":int(t.trade_no),"x":int(t.j)-start_i,"y":float(t.exit_price),
+                "color":"#8b42ae" if t.return_pct>0 else "#db353f",
+                "time":t.ext} for t in exits.itertuples()]
+        # Each event keeps its original candle X and fill price. Labels use 6 lanes.
+        for events,area,kind in ((buys,top,"B"),(sells,bot,"S")):
+            lanes=label_positions(events,rows=6,spacing=13)
+            for e in events:
+                xx,yy=e["x"],e["y"]
+                if kind=="B":
+                    ax.scatter([xx],[yy],marker="^",s=82,facecolors="#f9da29",
+                               edgecolors="#111111",linewidths=1.0,zorder=8)
+                    color="#111111";label_y=.78-lanes[e["id"]]*.12
+                else:
+                    ax.scatter([xx],[yy],marker="x",s=92,color=e["color"],
+                               linewidths=2.4,zorder=8)
+                    color=e["color"];label_y=.81-lanes[e["id"]]*.12
+                line=ConnectionPatch(xyA=(xx,yy),coordsA=ax.transData,
+                                     xyB=(xx,label_y),coordsB=area.transData,
+                                     color=color,lw=.58,alpha=.8,zorder=1)
+                fig.add_artist(line)
+                area.text(xx,label_y,f"{kind}{e['id']}",ha="center",va="center",
+                          fontsize=8.2,fontweight="bold",color=color,
+                          bbox=dict(facecolor="#f8f9fc",edgecolor="none",pad=.6),zorder=12)
+        handles=[
+            Line2D([0],[0],color="#2564bc",lw=1.4,label="BB upper"),
+            Line2D([0],[0],color="#7b838e",lw=1.4,label="MA20 / BB middle"),
+            Line2D([0],[0],color="#8951ac",lw=1.4,label="BB lower"),
+            Line2D([0],[0],marker="^",color="none",markerfacecolor="#f9da29",
+                   markeredgecolor="black",markersize=9,label="BUY"),
+            Line2D([0],[0],marker="x",color="#8b42ae",lw=0,markersize=9,label="Winning SELL"),
+            Line2D([0],[0],marker="x",color="#db353f",lw=0,markersize=9,label="Losing SELL"),
+        ]
+        ax.legend(handles=handles,loc="upper center",bbox_to_anchor=(.5,1.015),
+                  ncol=6,fontsize=8,framealpha=.90)
+        notes.axis("off")
+        notes.axhline(.94,color="#d1d5db",lw=.6)
+        notes.text(.006,.76,"REVIEW NOTES:",transform=notes.transAxes,color="#475569",weight="bold")
+        notes.text(.13,.76,"Missed trades / incorrect entry / better entry / exit / sideways:",
+                   transform=notes.transAxes,color="#64748b")
+        notes.axhline(.18,color="#d1d5db",lw=.5)
+        fig.text(.06,.038,"Canonical 136-trade ledger; labels retain original IDs and fill prices. All candle times UK.",
+                 color="#6b7280",fontsize=8)
+        pdf.savefig(fig,dpi=115)
+        plt.close(fig)
+        print(f"PAGE {page:02d}: {p} candles={n} BUY={len(buys)} SELL={len(sells)} wins={w} losses={l}")
+print(f"COMPLETE: 12 pages, {count_entries} included entries, {count_exits} included exits, PDF={PDF}, size={PDF.stat().st_size} bytes")
