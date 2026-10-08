@@ -1,0 +1,20 @@
+# Rudra Reversal — Memory points (2026-10-08)
+
+**Project:** `raghunathbhandari/AlgoStrategy` — folder `NQ/rudra-reversal/`.
+**Full latest checkpoint:** [V2_RESEARCH_CHECKPOINT_2026-10-08.md](V2_RESEARCH_CHECKPOINT_2026-10-08.md).
+**Next session starts:** [HANDOFF.md](HANDOFF.md).
+**Current work:** PAUSED. No need to run research or modify trading bot until user resumes.
+
+1. **Rudra-Reversal-1.0 is LOCKED:** NQ 1H, canonical BB20/2.0 STD ddof=0, 2/3 lower BB touches (near 0.15%), 150-bar depth >=20%, long at signal close, one position, upper BB near/touch exit. No fixed stop, RSI or MA20-touch. Historical 136 closed trades, 101 wins, 35 losses, 74.2647% win, +33.5512% compounded. September 2026 16 trades, 13 wins, 3 losses, +6.3127%. Do NOT change original code or ledger.
+2. **Rudra-Reversal-2.0 is EXPERIMENTAL, NOT LOCKED**, with own script, docs and outputs in `NQ/rudra-reversal/`. Goal is no longer just filter losers; **detect the market regime FIRST**, then use different entry and exit rules to capture large trend moves.
+3. **Regimes:** RANGE → reversal, TREND STARTING → breakout with initial protection, UPTREND CONFIRMED → trend following (pullback/retest/higher low) with swing trailing, UNCLEAR/DOWN → wait (long-only). Need causal classification using completed candles, no future knowledge.
+4. **Filter 5:** current BBW <= trailing 150-bar 20th-percentile AND absolute MA20 10-bar slope <=0.05% => skip new BUY. Strong negative slope alone is not bad. Sep F5 alone: 15 trades, 12 wins, 3 losses, +5.8728% (below v1).
+5. **Filter 6:** 60-bar swing range using pivots 3-left and 3-right confirmation; entry swing position above 50% candidate rejection. Unstable when pivots expire and can wrongly reject good trades; range-specific filtering needed, not a blanket uptrend rule. On 8 Sep 10:00/15:00/21:00 swing positions were ~76.1/70.8/65.3%; filter removed these sideways entries but also removed profitable 15–17 Sep trades. **Preliminary combined F5+F6** September: 8 trades, 5 wins, 3 losses, +2.5762%; not independently validated as a full saved report.
+6. **2.5 STD exploration:** 9 Sep trades, 6 wins, 3 losses, +2.9524% when changing both BB entry and exit; experimental only.
+7. **Trend benchmarks:** 04 Sep 05:00 UK breakout close 29,598.25 MA20 29,428.26 slope +0.607%, later failed; 17 Sep 12:00 close 29,620 MA20 29,444.03 slope +0.170%, earlier sustained rally. Distinguish these! V1 exited 16 Sep 20:00 entry at 17 Sep 08:00 with +1.0708% then market rallied another ~4.38% by 21 Sep high, showing opportunity for trend-continuation.
+8. **Trend entry tests:** 12-bar breakout, follow-through confirmation, breakout retest, MA20 pullback.
+9. **Trend exit A–E:** A first close below MA20; B two closes; C break of confirmed 3/3 swing low; D MA20+ swing-low break; E MA20 protection until +1% close, then swing-low trail. September trend-only CONFIRM + C: 4 trades, 2 winners, 2 losers, +4.113% compounded, driven by one +4.95% big winner. In-sample exploratory, not combined v2 performance and not verified by independent runner.
+10. **Core unfinished research:** robust causal regime timeline, coherent swing/resistance boxes and breakout invalidation, continuation entry/exit refinement, portfolio with one position and both range/trend strategies, actual return/drawdown and trade audit, then out-of-sample validation. Do not select based purely on September.
+11. **Saved scripts:** `rudra_reversal_1_0.py` frozen, `rudra_reversal_2_0.py` experimental F5+F6, `experiment_regime_entry_exit_sep.py` entry × exit research. Source CSV `NQ/data/recent/NQ_1h_12m_2025-10-07_2026-10-07.csv`.
+12. **Review format:** simple English, UK 24-hour time, per-trade entry/exit price, slope%, BBW%, swing high/low, 50% midpoint, swing%, GOOD/BAD, P/L and WIN/LOSS. Chart markers: yellow entry triangle, purple exit X; labels outside candle area with pointer line.
+13. **User explicitly paused work for today:** save state, do not run further experiments or alter live bot. Resume v2 only upon request. Keep v1 untouched.
