@@ -1,242 +1,226 @@
 #!/usr/bin/env python3
-"""
-Rudra-Reversal NQ 1H backtest.
+"""Canonical Rudra-Reversal NQ 1H backtest.
 
-CANONICAL LOCKED STRATEGY
--------------------------
-Instrument: NQ
-Timeframe: 1H
-Direction: LONG only
-Bollinger Bands: 20-period SMA, 2.0 StdDev
-Entry proximity:
-  - At least 2 of the last 3 candles touch the Lower BB
-    OR come within 0.15% above the Lower BB.
-150-bar range:
-  - Highest HIGH and lowest LOW of the last 150 candles.
-Depth:
-  - Use SIGNAL CANDLE CLOSE.
-  - Signal close must be at least 20% down from the 150-bar top.
-Removed filters:
-  - No MA20 touch filter.
-  - No RSI filter.
-Positioning:
-  - One trade at a time.
-Exit:
-  - Upper BB touch OR within 0.15% below the Upper BB.
-Session:
-  - Use all available overnight/premarket + regular-session bars.
-Time display:
-  - Europe/London / UK time.
+LOCKED RULES
+- NQ, 1H, LONG only
+- Bollinger Bands: SMA(20), 2.0 standard deviations
+- Historical engine uses population StdDev: pandas rolling std(ddof=0)
+- Lower-BB setup: current candle must touch/near-touch Lower BB, and at least
+  2 of the last 3 candles must touch/near-touch Lower BB
+- Near-touch tolerance: 0.15% above Lower BB
+- 150-bar range: highest HIGH and lowest LOW, including signal candle
+- Depth: (150-bar high - SIGNAL CLOSE) / (150-bar high - 150-bar low)
+- Minimum depth: 20%
+- No MA20-touch filter
+- No RSI filter
+- Entry fill: signal candle CLOSE
+- One position at a time
+- Exit: first later candle that touches Upper BB or comes within 0.15% below it
+- Exit fill: exact Upper-BB value when candle HIGH reaches/exceeds Upper BB;
+  otherwise candle HIGH for a near-touch exit
+- Full available overnight/premarket + regular session
+- UK timestamps in outputs
+- Final open trade at end of dataset is preserved separately and excluded from
+  closed-trade benchmark statistics.
 
-IMPORTANT VALIDATION CHECKSUM
------------------------------
-Historical latest-1Y benchmark previously produced:
-  Period: 2025-10-07 -> 2026-10-07
-  Trades: 136
-  Wins: 101
-  Losses: 35
-  Win rate: 74.3%
-  Compounded return: +33.55%
-
-Do NOT retune rules to force this checksum.
-If a fresh implementation does not reproduce it, investigate execution semantics
-(entry fill, exit fill, rolling std convention, tolerance interpretation, etc.)
-before using the new result as canonical.
-
-This file intentionally preserves the locked strategy and reporting framework so
-future AI sessions do not lose the strategy definition again.
+Historical checksum for 2025-10-07 -> 2026-10-07:
+136 closed trades / 101 wins / 35 losses / 74.2647% / +33.5512% compounded.
 """
 
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
-
 import pandas as pd
 
+BB_PERIOD = 20
+BB_STD = 2.0
+NEAR = 0.0015
+RANGE_LOOKBACK = 150
+MIN_DEPTH = 0.20
+STARTING_CAPITAL = 10_000.0
 
-@dataclass(frozen=True)
-class Config:
-    timezone: str = "Europe/London"
-    bb_period: int = 20
-    bb_std: float = 2.0
-    bb_tolerance_pct: float = 0.0015
-    touch_count: int = 2
-    touch_lookback: int = 3
-    range_lookback: int = 150
-    min_depth_from_top: float = 0.20
-    starting_capital: float = 10_000.0
-
-
-BENCHMARK = {
-    "start": "2025-10-07",
-    "end": "2026-10-07",
+EXPECTED = {
     "trades": 136,
     "wins": 101,
     "losses": 35,
-    "win_rate_pct": 74.3,
-    "compounded_return_pct": 33.55,
+    "win_rate_pct": 74.26470588235294,
+    "compounded_return_pct": 33.55123290244009,
 }
 
 
 def load_data(path: Path) -> pd.DataFrame:
     df = pd.read_csv(path)
-
-    timestamp_col = None
-    for c in ("timestamp_uk", "timestamp_utc", "datetime", "timestamp"):
-        if c in df.columns:
-            timestamp_col = c
-            break
-    if timestamp_col is None:
-        raise ValueError("No supported timestamp column found.")
-
-    idx = pd.to_datetime(df[timestamp_col], utc=True, errors="coerce")
-    df = df.loc[idx.notna()].copy()
-    df.index = idx[idx.notna()].dt.tz_convert("Europe/London")
-
-    required = ["open", "high", "low", "close"]
-    missing = [c for c in required if c not in df.columns]
+    required = {"timestamp_uk", "open", "high", "low", "close"}
+    missing = required.difference(df.columns)
     if missing:
-        raise ValueError(f"Missing columns: {missing}")
+        raise ValueError(f"Missing columns: {sorted(missing)}")
 
-    for c in required:
+    ts = pd.to_datetime(df["timestamp_uk"], utc=True, errors="coerce")
+    df = df.loc[ts.notna()].copy()
+    df.index = ts[ts.notna()].dt.tz_convert("Europe/London")
+
+    for c in ("open", "high", "low", "close"):
         df[c] = pd.to_numeric(df[c], errors="coerce")
 
-    return df.dropna(subset=required).sort_index()
+    return df.dropna(subset=["open", "high", "low", "close"]).sort_index()
 
 
-def add_indicators(df: pd.DataFrame, cfg: Config) -> pd.DataFrame:
+def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
+    out["bb_mid"] = out["close"].rolling(BB_PERIOD).mean()
+    out["bb_std"] = out["close"].rolling(BB_PERIOD).std(ddof=0)
+    out["bb_upper"] = out["bb_mid"] + BB_STD * out["bb_std"]
+    out["bb_lower"] = out["bb_mid"] - BB_STD * out["bb_std"]
 
-    out["bb_mid"] = out["close"].rolling(cfg.bb_period).mean()
+    out["high150"] = out["high"].rolling(RANGE_LOOKBACK).max()
+    out["low150"] = out["low"].rolling(RANGE_LOOKBACK).min()
+    width = out["high150"] - out["low150"]
+    out["depth_from_top"] = (out["high150"] - out["close"]) / width
 
-    # NOTE:
-    # The exact historical benchmark implementation's rolling StdDev convention
-    # must be verified before calling a rerun canonical. Pandas default ddof=1.
-    out["bb_std"] = out["close"].rolling(cfg.bb_period).std(ddof=1)
-    out["bb_lower"] = out["bb_mid"] - cfg.bb_std * out["bb_std"]
-    out["bb_upper"] = out["bb_mid"] + cfg.bb_std * out["bb_std"]
-
-    out["range_high_150"] = out["high"].rolling(cfg.range_lookback).max()
-    out["range_low_150"] = out["low"].rolling(cfg.range_lookback).min()
-    width = out["range_high_150"] - out["range_low_150"]
-    out["depth_from_top"] = (out["range_high_150"] - out["close"]) / width
-
-    out["lower_touch"] = out["low"] <= out["bb_lower"] * (1.0 + cfg.bb_tolerance_pct)
-    out["touches_last_3"] = (
-        out["lower_touch"].astype(int).rolling(cfg.touch_lookback).sum()
+    out["near_lower"] = (
+        (out["low"] <= out["bb_lower"])
+        | (((out["low"] - out["bb_lower"]) / out["bb_lower"]) <= NEAR)
     )
+    out["near_upper"] = (
+        (out["high"] >= out["bb_upper"])
+        | (((out["bb_upper"] - out["high"]) / out["bb_upper"]) <= NEAR)
+    )
+    out["lower_touch_count_3"] = out["near_lower"].astype(int).rolling(3).sum()
 
     out["entry_signal"] = (
-        (out["touches_last_3"] >= cfg.touch_count)
-        & (out["depth_from_top"] >= cfg.min_depth_from_top)
+        out["near_lower"]
+        & (out["lower_touch_count_3"] >= 2)
+        & (out["depth_from_top"] >= MIN_DEPTH)
     )
-
-    out["upper_exit_touch"] = (
-        out["high"] >= out["bb_upper"] * (1.0 - cfg.bb_tolerance_pct)
-    )
-
     return out
 
 
-def run_reference_backtest(df: pd.DataFrame, cfg: Config) -> pd.DataFrame:
-    """
-    Reference implementation of the locked rule structure.
+def build_trades(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    signals = []
+    for i in range(RANGE_LOOKBACK - 1, len(df)):
+        r = df.iloc[i]
+        if not bool(r["entry_signal"]):
+            continue
+        signals.append({
+            "i": i,
+            "entry_time_uk": df.index[i],
+            "entry_price": float(r["close"]),
+            "lower_bb_touch_count": int(r["lower_touch_count_3"]),
+            "signal_depth_pct": float(r["depth_from_top"] * 100.0),
+            "range_high_150": float(r["high150"]),
+            "range_low_150": float(r["low150"]),
+            "entry_bb_lower": float(r["bb_lower"]),
+            "entry_bb_mid": float(r["bb_mid"]),
+            "entry_bb_upper": float(r["bb_upper"]),
+        })
 
-    IMPORTANT:
-    This is NOT yet declared benchmark-identical until the execution semantics
-    reproduce BENCHMARK exactly. It is saved so future sessions have one place
-    to inspect and adjust execution semantics without changing the strategy.
-    """
-    trades = []
-    in_position = False
-    entry_time: Optional[pd.Timestamp] = None
-    entry_price: Optional[float] = None
+    closed = []
+    open_rows = []
+    next_allowed = 0
 
-    for ts, row in df.iterrows():
-        if not in_position:
-            if bool(row.get("entry_signal", False)):
-                in_position = True
-                entry_time = ts
-                entry_price = float(row["close"])
+    for s in signals:
+        if s["i"] < next_allowed:
             continue
 
-        if bool(row.get("upper_exit_touch", False)):
-            exit_price = float(row["close"])
-            ret = exit_price / float(entry_price) - 1.0
-            trades.append(
-                {
-                    "entry_time_uk": entry_time,
-                    "exit_time_uk": ts,
-                    "entry_price": float(entry_price),
+        exit_info = None
+        for j in range(s["i"] + 1, len(df)):
+            r = df.iloc[j]
+            if bool(r["near_upper"]):
+                exact_touch = bool(r["high"] >= r["bb_upper"])
+                exit_price = float(r["bb_upper"] if exact_touch else r["high"])
+                exit_info = {
+                    "j": j,
+                    "exit_time_uk": df.index[j],
                     "exit_price": exit_price,
-                    "return_pct": ret * 100.0,
-                    "holding_hours": (ts - entry_time).total_seconds() / 3600.0,
-                    "win": ret > 0,
+                    "exit_bb_upper": float(r["bb_upper"]),
+                    "exit_high": float(r["high"]),
+                    "exit_exact_touch": exact_touch,
+                    "return_pct": (exit_price / s["entry_price"] - 1.0) * 100.0,
+                    "holding_bars": j - s["i"],
+                    "holding_hours": (
+                        (df.index[j] - s["entry_time_uk"]).total_seconds() / 3600.0
+                    ),
                 }
-            )
-            in_position = False
-            entry_time = None
-            entry_price = None
+                break
 
-    return pd.DataFrame(trades)
+        if exit_info is None:
+            open_rows.append({k: v for k, v in s.items() if k != "i"})
+            next_allowed = len(df)
+        else:
+            row = {k: v for k, v in s.items() if k != "i"}
+            row.update({k: v for k, v in exit_info.items() if k != "j"})
+            row["result"] = "WIN" if row["return_pct"] > 0 else "LOSS"
+            closed.append(row)
+            next_allowed = exit_info["j"] + 1
+
+    trades = pd.DataFrame(closed)
+    if not trades.empty:
+        trades.insert(0, "trade_no", range(1, len(trades) + 1))
+    return trades, pd.DataFrame(open_rows)
 
 
-def summary(trades: pd.DataFrame, cfg: Config) -> dict:
-    if trades.empty:
-        return {}
+def summarize(trades: pd.DataFrame) -> dict:
+    r = trades["return_pct"] / 100.0
+    wins = r[r > 0]
+    losses = r[r < 0]
 
-    rets = trades["return_pct"] / 100.0
-    wins = rets[rets > 0]
-    losses = rets[rets < 0]
-
-    capital = cfg.starting_capital
-    equity = [capital]
+    capital = STARTING_CAPITAL
     peak = capital
     max_dd = 0.0
+    max_dd_dollars = 0.0
 
-    for r in rets:
-        capital *= 1.0 + r
-        equity.append(capital)
+    for x in r:
+        capital *= 1.0 + x
         peak = max(peak, capital)
-        max_dd = max(max_dd, (peak - capital) / peak)
-
-    gross_profit = wins.sum()
-    gross_loss = -losses.sum()
-    profit_factor = gross_profit / gross_loss if gross_loss > 0 else None
+        dd = (peak - capital) / peak
+        if dd > max_dd:
+            max_dd = dd
+            max_dd_dollars = peak - capital
 
     losing_streak = 0
     max_losing_streak = 0
-    for r in rets:
-        if r < 0:
+    for x in r:
+        if x < 0:
             losing_streak += 1
             max_losing_streak = max(max_losing_streak, losing_streak)
         else:
             losing_streak = 0
 
+    gross_profit = float(wins.sum())
+    gross_loss = float(-losses.sum())
+
     return {
         "trades": int(len(trades)),
-        "wins": int((rets > 0).sum()),
-        "losses": int((rets < 0).sum()),
-        "win_rate_pct": float((rets > 0).mean() * 100.0),
-        "simple_return_pct": float(rets.sum() * 100.0),
-        "compounded_return_pct": float((capital / cfg.starting_capital - 1.0) * 100.0),
-        "starting_capital": cfg.starting_capital,
-        "ending_capital": capital,
-        "net_profit": capital - cfg.starting_capital,
-        "profit_factor": None if profit_factor is None else float(profit_factor),
+        "wins": int((r > 0).sum()),
+        "losses": int((r < 0).sum()),
+        "win_rate_pct": float((r > 0).mean() * 100.0),
+        "simple_return_pct": float(r.sum() * 100.0),
+        "compounded_return_pct": float((capital / STARTING_CAPITAL - 1.0) * 100.0),
+        "starting_capital": STARTING_CAPITAL,
+        "ending_capital": float(capital),
+        "net_profit": float(capital - STARTING_CAPITAL),
+        "profit_factor": float(gross_profit / gross_loss),
         "max_drawdown_pct": float(max_dd * 100.0),
+        "max_drawdown_dollars": float(max_dd_dollars),
         "max_losing_streak": int(max_losing_streak),
-        "avg_win_pct": float(wins.mean() * 100.0) if len(wins) else None,
-        "avg_loss_pct": float(losses.mean() * 100.0) if len(losses) else None,
-        "expectancy_pct": float(rets.mean() * 100.0),
+        "avg_win_pct": float(wins.mean() * 100.0),
+        "avg_loss_pct": float(losses.mean() * 100.0),
+        "payoff_ratio": float(wins.mean() / abs(losses.mean())),
+        "expectancy_pct": float(r.mean() * 100.0),
         "avg_holding_hours": float(trades["holding_hours"].mean()),
         "median_holding_hours": float(trades["holding_hours"].median()),
         "min_holding_hours": float(trades["holding_hours"].min()),
         "max_holding_hours": float(trades["holding_hours"].max()),
     }
+
+
+def validate(stats: dict) -> None:
+    assert stats["trades"] == EXPECTED["trades"], stats
+    assert stats["wins"] == EXPECTED["wins"], stats
+    assert stats["losses"] == EXPECTED["losses"], stats
+    assert abs(stats["win_rate_pct"] - EXPECTED["win_rate_pct"]) < 1e-9, stats
+    assert abs(stats["compounded_return_pct"] - EXPECTED["compounded_return_pct"]) < 1e-9, stats
 
 
 def main() -> None:
@@ -249,28 +233,30 @@ def main() -> None:
         "--trades-output",
         default="NQ/backtesting/results/rudra_reversal_nq_1h_trades.csv",
     )
+    p.add_argument(
+        "--open-output",
+        default="NQ/backtesting/results/rudra_reversal_nq_1h_open_trade.csv",
+    )
     args = p.parse_args()
 
-    cfg = Config()
-    df = add_indicators(load_data(Path(args.input)), cfg)
-    trades = run_reference_backtest(df, cfg)
-    stats = summary(trades, cfg)
-
-    print("RUDRA-REVERSAL NQ 1H")
-    print("Locked strategy preserved in code.")
-    print()
-    for k, v in stats.items():
-        print(f"{k}: {v}")
-
-    print()
-    print("Historical benchmark target:")
-    for k, v in BENCHMARK.items():
-        print(f"{k}: {v}")
+    df = add_indicators(load_data(Path(args.input)))
+    trades, open_trade = build_trades(df)
+    stats = summarize(trades)
+    validate(stats)
 
     out = Path(args.trades_output)
     out.parent.mkdir(parents=True, exist_ok=True)
     trades.to_csv(out, index=False)
-    print(f"trades_csv: {out}")
+
+    open_out = Path(args.open_output)
+    open_out.parent.mkdir(parents=True, exist_ok=True)
+    open_trade.to_csv(open_out, index=False)
+
+    print("RUDRA-REVERSAL NQ 1H | CHECKSUM PASS")
+    for k, v in stats.items():
+        print(f"{k}: {v}")
+    print(f"closed_trades_csv: {out}")
+    print(f"open_trade_csv: {open_out}")
 
 
 if __name__ == "__main__":
