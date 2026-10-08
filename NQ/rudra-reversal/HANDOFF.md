@@ -1,5 +1,7 @@
 # RUDRA REVERSAL — NEXT SESSION HANDOFF (2026-10-08)
 
+> **PAUSED STATE — 2026-10-08:** Start with [MEMORY_POINTS.md](MEMORY_POINTS.md) for quick recall, then [V2_RESEARCH_CHECKPOINT_2026-10-08.md](V2_RESEARCH_CHECKPOINT_2026-10-08.md) for exact results, assumptions and remaining work. **v1.0 is LOCKED; v2.0 is EXPERIMENTAL.** Do not run further experiments or edit live bot until requested. No complete validated range+trend v2.0 backtest yet.
+
 **Start here.** The canonical project folder for versioned Rudra Reversal work is `NQ/rudra-reversal/`.
 
 ## Version separation
