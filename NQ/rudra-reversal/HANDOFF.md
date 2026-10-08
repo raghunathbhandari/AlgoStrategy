@@ -27,3 +27,15 @@
 4. Never promote v2 to live or call it locked without explicit user decision.
 
 Charts: entry yellow triangle, exit purple X; labels must be legible. User prefers concise English and per-entry tables.
+
+
+## 2026-10-08 trend-entry and trailing-exit experiments (latest)
+
+- [September 2026 trend-entry × exit research](SEPTEMBER_TREND_ENTRY_EXIT_RESEARCH.md)
+- [Reproducible separate experimental script](experiment_regime_entry_exit_sep.py)
+- Trend-entry candidates: 12-bar breakout, follow-through confirmation, breakout retest, MA20 pullback.
+- Exit research: A first MA20 close below, B two consecutive below, C confirmed 3/3 swing-low break, D MA20+ swing low, E MA20 protection until +1% close then swing-low trailing.
+- September exploratory trend-only table: confirmed-breakout + swing low: **4 trades, 2 wins, +4.113% compounded** (not combined v2 strategy; research only). MA20-exit combinations capture less of sustained rallies but often protect false breakouts sooner.
+- Important issue: trend state starts 03 Sep 14:00 and spans 04 Sep 05:00; also 16 Sep 14:00 precedes the key 17 Sep 12:00 signal. Review dynamic regime classification before changing signals.
+- v2.0 must eventually dynamically choose RANGE reversal vs UPTREND trend follower and maintain **one shared portfolio position at a time**. No combined test has been validated.
+- Retain original v1.0 benchmark and no production changes. Do not optimize solely for September: study other months after manual review.
